@@ -24,6 +24,7 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
 ## Getting Started Locally
 
 ### Prerequisites
+
 * Visual Studio 2022 or VS Code
 * .NET 8 SDK
 * SQL Server Express or LocalDB
