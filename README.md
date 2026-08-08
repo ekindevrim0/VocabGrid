@@ -1,10 +1,10 @@
-# GigaMind
+# VocabGrid API
 
 An ASP.NET Core Web API backend for a language learning and memorization app utilizing flashcards, user authentication, and a SQL Server database.
 
 ---
 
-##  Tech Stack
+## Tech Stack
 
 * **Framework:** ASP.NET Core Web API (.NET 8)
 * **Database:** SQL Server
@@ -13,7 +13,7 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
 
 ---
 
-##  Features
+## Features
 
 * **User Authentication:** Secure registration and login endpoints using JWT.
 * **Flashcard & Deck Management:** Create, update, and manage vocabulary flashcards for target languages.
@@ -21,11 +21,11 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
 
 ---
 
-##  Getting Started Locally
+## Getting Started Locally
 
 ### Prerequisites
-* [Visual Studio 2022](https://visualstudio.microsoft.com/) (with .NET desktop and web development workload) or [VS Code](https://code.visualstudio.com/)
-* [.NET 8 SDK](https://dotnet.microsoft.com/download)
+* Visual Studio 2022 or VS Code
+* .NET 8 SDK
 * SQL Server Express or LocalDB
 
 ### Installation & Setup
@@ -34,4 +34,3 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
    ```bash
    git clone [https://github.com/ekindevrim0/GigaMind.git](https://github.com/ekindevrim0/GigaMind.git)
    cd GigaMind
-
