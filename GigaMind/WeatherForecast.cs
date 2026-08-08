@@ -1,4 +1,4 @@
-namespace GigaMind
+namespace VocabGrid
 {
     public class WeatherForecast
     {

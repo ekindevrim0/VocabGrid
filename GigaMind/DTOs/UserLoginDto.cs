@@ -1,4 +1,4 @@
-﻿namespace GigaMind.API.DTOs;
+﻿namespace VocabGrid.API.DTOs;
 
 public class UserLoginDto
 {

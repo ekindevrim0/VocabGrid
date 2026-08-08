@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace GigaMind.Controllers
+namespace VocabGrid.Controllers
 {
     [ApiController]
     [Route("[controller]")]

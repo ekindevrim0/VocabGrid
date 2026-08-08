@@ -1,4 +1,4 @@
-﻿namespace GigaMind.API.Entities;
+﻿namespace VocabGrid.API.Entities;
 
 public class LessonVocabulary
 {

@@ -1,7 +1,7 @@
-using GigaMind;
-using GigaMind.API.Data;
-using GigaMind.Interfaces;
-using GigaMind.Repositories;
+using VocabGrid;
+using VocabGrid.API.Data;
+using VocabGrid.Interfaces;
+using VocabGrid.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 
@@ -12,7 +12,7 @@ builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "GigaMind API", Version = "v1" });
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "VocabGrid API", Version = "v1" });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {

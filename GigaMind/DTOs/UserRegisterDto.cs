@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace GigaMind.API.DTOs;
+namespace VocabGrid.API.DTOs;
 
 public class UserRegisterDto
 {

@@ -2,14 +2,14 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using GigaMind.API.Data;
-using GigaMind.API.DTOs;
-using GigaMind.API.Entities;
+using VocabGrid.API.Data;
+using VocabGrid.API.DTOs;
+using VocabGrid.API.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
-namespace GigaMind.API.Controllers;
+namespace VocabGrid.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

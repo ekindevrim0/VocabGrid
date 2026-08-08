@@ -1,4 +1,4 @@
-﻿namespace GigaMind.Interfaces
+﻿namespace VocabGrid.Interfaces
 {
     public interface IUnitOfWork : IDisposable
     {

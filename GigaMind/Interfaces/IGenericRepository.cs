@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 
-namespace GigaMind.Interfaces
+namespace VocabGrid.Interfaces
 {
     public interface IGenericRepository<T> where T : class
     {

@@ -1,10 +1,10 @@
-﻿using GigaMind;
-using GigaMind.API.Data;
-using GigaMind.Interfaces;
+﻿using VocabGrid;
+using VocabGrid.API.Data;
+using VocabGrid.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
-namespace GigaMind.Repositories
+namespace VocabGrid.Repositories
 {
     public class GenericRepository<T> : IGenericRepository<T> where T : class
     {

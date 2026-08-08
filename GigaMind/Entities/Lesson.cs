@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace GigaMind.API.Entities;
+namespace VocabGrid.API.Entities;
 
 public class Lesson
 {

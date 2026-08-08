@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using GigaMind.API.Entities;
+using VocabGrid.API.Entities;
 
-namespace GigaMind.API.Data;
+namespace VocabGrid.API.Data;
 
 public class AppDbContext : DbContext
 {

@@ -1,9 +1,9 @@
-﻿using GigaMind;
-using GigaMind.API.Data;
-using GigaMind.Interfaces;
+﻿using VocabGrid;
+using VocabGrid.API.Data;
+using VocabGrid.Interfaces;
 using System.Collections;
 
-namespace GigaMind.Repositories
+namespace VocabGrid.Repositories
 {
     public class UnitOfWork : IUnitOfWork
     {
