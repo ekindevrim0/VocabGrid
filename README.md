@@ -4,7 +4,7 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
 
 ---
 
-## 🚀 Tech Stack
+##  Tech Stack
 
 * **Framework:** ASP.NET Core Web API (.NET 8)
 * **Database:** SQL Server
@@ -13,7 +13,7 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
 
 ---
 
-## 🛠️ Features
+##  Features
 
 * **User Authentication:** Secure registration and login endpoints using JWT.
 * **Flashcard & Deck Management:** Create, update, and manage vocabulary flashcards for target languages.
@@ -21,7 +21,7 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
 
 ---
 
-## 💻 Getting Started Locally
+##  Getting Started Locally
 
 ### Prerequisites
 * [Visual Studio 2022](https://visualstudio.microsoft.com/) (with .NET desktop and web development workload) or [VS Code](https://code.visualstudio.com/)
