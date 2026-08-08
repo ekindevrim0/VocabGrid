@@ -1,7 +1,8 @@
-﻿namespace VocabGrid.API.DTOs;
-
-public class UserLoginDto
+﻿namespace VocabGrid.DTOs
 {
-    public string Email { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
+    public class UserLoginDto
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
 }

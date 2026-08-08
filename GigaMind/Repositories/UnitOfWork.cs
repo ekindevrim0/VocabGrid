@@ -1,14 +1,8 @@
-﻿using VocabGrid;
-using VocabGrid.API.Data;
-using VocabGrid.Interfaces;
-using System.Collections;
-
-namespace VocabGrid.Repositories
+﻿namespace VocabGrid.Repositories
 {
     public class UnitOfWork : IUnitOfWork
     {
         private readonly AppDbContext _context;
-        private Hashtable _repositories = new Hashtable();
 
         public UnitOfWork(AppDbContext context)
         {
@@ -17,16 +11,7 @@ namespace VocabGrid.Repositories
 
         public IGenericRepository<T> Repository<T>() where T : class
         {
-            var type = typeof(T).Name;
-
-            if (!_repositories.ContainsKey(type))
-            {
-                var repositoryType = typeof(GenericRepository<>);
-                var repositoryInstance = Activator.CreateInstance(repositoryType.MakeGenericType(typeof(T)), _context);
-                _repositories.Add(type, repositoryInstance);
-            }
-
-            return (IGenericRepository<T>)_repositories[type]!;
+            return new GenericRepository<T>(_context);
         }
 
         public async Task<int> CompleteAsync()

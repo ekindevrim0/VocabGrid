@@ -2,102 +2,113 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using VocabGrid.API.Data;
-using VocabGrid.API.DTOs;
-using VocabGrid.API.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using VocabGrid.Data;
+using VocabGrid.DTOs;
+using VocabGrid.Entities;
 
-namespace VocabGrid.API.Controllers;
-
-[ApiController]
-[Route("api/[controller]")]
-public class AuthController : ControllerBase
+namespace VocabGrid.Controllers
 {
-    private readonly AppDbContext _context;
-    private readonly IConfiguration _configuration;
-
-    public AuthController(AppDbContext context, IConfiguration configuration)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AuthController : ControllerBase
     {
-        _context = context;
-        _configuration = configuration;
-    }
+        private readonly AppDbContext _context;
+        private readonly IConfiguration _configuration;
 
-    [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] UserRegisterDto dto)
-    {
-        if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
+        public AuthController(AppDbContext context, IConfiguration configuration)
         {
-            return BadRequest(new { message = "Bu e-posta adresi zaten kullanımda." });
+            _context = context;
+            _configuration = configuration;
         }
 
-        var user = new User
+        [HttpPost("register")]
+        public async Task<IActionResult> Register(UserRegisterDto request)
         {
-            Username = dto.Username,
-            Email = dto.Email,
-            PasswordHash = HashPassword(dto.Password),
-            NativeLanguage = dto.NativeLanguage,
-            TargetLanguage = dto.TargetLanguage,
-            CreatedAt = DateTime.UtcNow
-        };
+            if (await _context.Users.AnyAsync(u => u.Email == request.Email))
+            {
+                return BadRequest("Bu e-posta adresi zaten kullanılıyor.");
+            }
 
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
+            CreatePasswordHash(request.Password, out byte[] passwordHash, out byte[] passwordSalt);
 
-        return Ok(new { message = "Kullanıcı kaydı başarılı.", userId = user.UserID });
-    }
+            var user = new User
+            {
+                FirstName = request.Email.Split('@')[0],
+                LastName = "User",
+                Email = request.Email,
+                Username = request.Email,
+                PasswordHash = passwordHash,
+                PasswordSalt = passwordSalt
+            };
 
-    [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] UserLoginDto dto)
-    {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
-        if (user == null || user.PasswordHash != HashPassword(dto.Password))
-        {
-            return Unauthorized(new { message = "E-posta veya şifre hatalı." });
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            return Ok("Kayıt başarılı.");
         }
 
-        // Token Oluştur
-        var token = GenerateJwtToken(user);
-
-        return Ok(new
+        [HttpPost("login")]
+        public async Task<IActionResult> Login(UserLoginDto request)
         {
-            message = "Giriş başarılı.",
-            token = token,
-            userId = user.UserID,
-            username = user.Username,
-            email = user.Email
-        });
-    }
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
 
-    private string GenerateJwtToken(User user)
-    {
-        var jwtSettings = _configuration.GetSection("Jwt");
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            if (user == null || !VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
+            {
+                return BadRequest("E-posta veya şifre hatalı.");
+            }
 
-        var claims = new[]
+            string token = CreateToken(user);
+            return Ok(new { token });
+        }
+
+        private string CreateToken(User user)
         {
-            new Claim(ClaimTypes.NameIdentifier, user.UserID.ToString()),
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Email, user.Email)
-        };
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(ClaimTypes.Name, user.Username ?? user.Email),
+                new Claim(ClaimTypes.Email, user.Email)
+            };
 
-        var token = new JwtSecurityToken(
-            issuer: jwtSettings["Issuer"],
-            audience: jwtSettings["Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(7), // Token 7 gün geçerli
-            signingCredentials: creds
-        );
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
+                _configuration.GetSection("Jwt:Key").Value ?? "SuperSecretKey12345678901234567890123456789012"));
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
-    }
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
 
-    private static string HashPassword(string password)
-    {
-        using var sha256 = SHA256.Create();
-        var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-        return Convert.ToBase64String(bytes);
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.UtcNow.AddDays(1),
+                SigningCredentials = creds,
+                Issuer = _configuration["Jwt:Issuer"],
+                Audience = _configuration["Jwt:Audience"]
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+
+            return tokenHandler.WriteToken(token);
+        }
+
+        private void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
+        {
+            using (var hmac = new HMACSHA512())
+            {
+                passwordSalt = hmac.Key;
+                passwordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+            }
+        }
+
+        private bool VerifyPasswordHash(string password, byte[] storedHash, byte[] storedSalt)
+        {
+            using (var hmac = new HMACSHA512(storedSalt))
+            {
+                var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+                return computedHash.SequenceEqual(storedHash);
+            }
+        }
     }
 }

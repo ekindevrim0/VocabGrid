@@ -1,8 +1,5 @@
-﻿using VocabGrid;
-using VocabGrid.API.Data;
-using VocabGrid.Interfaces;
+﻿using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
-using System.Linq.Expressions;
 
 namespace VocabGrid.Repositories
 {

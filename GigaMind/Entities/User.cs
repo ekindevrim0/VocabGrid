@@ -1,21 +1,20 @@
-﻿using System.ComponentModel.DataAnnotations;
-
-namespace VocabGrid.API.Entities;
+﻿namespace VocabGrid.Entities;
 
 public class User
 {
-    [Key]
-    public int UserID { get; set; }
+    public int Id { get; set; }
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
-    public string NativeLanguage { get; set; } = "tr-TR";
-    public string TargetLanguage { get; set; } = "en-US";
-    public int StreakCount { get; set; } = 0;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public bool IsActive { get; set; } = true;
+    public byte[] PasswordHash { get; set; } = Array.Empty<byte>();
+    public byte[] PasswordSalt { get; set; } = Array.Empty<byte>();
 
-    // Navigation Properties
-    public ICollection<UserProgress> UserProgresses { get; set; } = new List<UserProgress>();
-    public ICollection<UserWordProgress> UserWordProgresses { get; set; } = new List<UserWordProgress>();
+    public string NativeLanguage { get; set; } = "English";
+    public string TargetLanguage { get; set; } = "Turkish";
+    public int DailyGoalMinutes { get; set; } = 10;
+    public int CurrentStreak { get; set; } = 0;
+    public int Level { get; set; } = 1;
+
+    public ICollection<UserCategory> UserCategories { get; set; } = new List<UserCategory>();
 }

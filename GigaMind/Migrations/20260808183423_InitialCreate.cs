@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+
 namespace VocabGrid.Migrations
 {
     /// <inheritdoc />
@@ -11,6 +13,37 @@ namespace VocabGrid.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.CreateTable(
+                name: "Badges",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Icon = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    IsEarned = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Badges", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Categories",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    IsSelected = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Categories", x => x.Id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "Lessons",
                 columns: table => new
@@ -32,20 +65,23 @@ namespace VocabGrid.Migrations
                 name: "Users",
                 columns: table => new
                 {
-                    UserID = table.Column<int>(type: "int", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
+                    FirstName = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Username = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PasswordHash = table.Column<byte[]>(type: "varbinary(max)", nullable: false),
+                    PasswordSalt = table.Column<byte[]>(type: "varbinary(max)", nullable: false),
                     NativeLanguage = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     TargetLanguage = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    StreakCount = table.Column<int>(type: "int", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    IsActive = table.Column<bool>(type: "bit", nullable: false)
+                    DailyGoalMinutes = table.Column<int>(type: "int", nullable: false),
+                    CurrentStreak = table.Column<int>(type: "int", nullable: false),
+                    Level = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Users", x => x.UserID);
+                    table.PrimaryKey("PK_Users", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -86,6 +122,30 @@ namespace VocabGrid.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "UserCategories",
+                columns: table => new
+                {
+                    UserId = table.Column<int>(type: "int", nullable: false),
+                    CategoryId = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserCategories", x => new { x.UserId, x.CategoryId });
+                    table.ForeignKey(
+                        name: "FK_UserCategories_Categories_CategoryId",
+                        column: x => x.CategoryId,
+                        principalTable: "Categories",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_UserCategories_Users_UserId",
+                        column: x => x.UserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "UserProgresses",
                 columns: table => new
                 {
@@ -110,7 +170,7 @@ namespace VocabGrid.Migrations
                         name: "FK_UserProgresses_Users_UserID",
                         column: x => x.UserID,
                         principalTable: "Users",
-                        principalColumn: "UserID",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
@@ -119,7 +179,8 @@ namespace VocabGrid.Migrations
                 columns: table => new
                 {
                     LessonID = table.Column<int>(type: "int", nullable: false),
-                    WordID = table.Column<int>(type: "int", nullable: false)
+                    WordID = table.Column<int>(type: "int", nullable: false),
+                    VocabularyWordID = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -131,8 +192,8 @@ namespace VocabGrid.Migrations
                         principalColumn: "LessonID",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_LessonVocabularies_Vocabularies_WordID",
-                        column: x => x.WordID,
+                        name: "FK_LessonVocabularies_Vocabularies_VocabularyWordID",
+                        column: x => x.VocabularyWordID,
                         principalTable: "Vocabularies",
                         principalColumn: "WordID",
                         onDelete: ReferentialAction.Cascade);
@@ -158,7 +219,7 @@ namespace VocabGrid.Migrations
                         name: "FK_UserWordProgresses_Users_UserID",
                         column: x => x.UserID,
                         principalTable: "Users",
-                        principalColumn: "UserID",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_UserWordProgresses_Vocabularies_VocabularyWordID",
@@ -169,7 +230,7 @@ namespace VocabGrid.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "QuizOptions",
+                name: "QuizOption",
                 columns: table => new
                 {
                     OptionID = table.Column<int>(type: "int", nullable: false)
@@ -180,29 +241,68 @@ namespace VocabGrid.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_QuizOptions", x => x.OptionID);
+                    table.PrimaryKey("PK_QuizOption", x => x.OptionID);
                     table.ForeignKey(
-                        name: "FK_QuizOptions_Quizzes_QuizID",
+                        name: "FK_QuizOption_Quizzes_QuizID",
                         column: x => x.QuizID,
                         principalTable: "Quizzes",
                         principalColumn: "QuizID",
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            migrationBuilder.CreateIndex(
-                name: "IX_LessonVocabularies_WordID",
-                table: "LessonVocabularies",
-                column: "WordID");
+            migrationBuilder.InsertData(
+                table: "Badges",
+                columns: new[] { "Id", "Description", "Icon", "IsEarned", "Name" },
+                values: new object[,]
+                {
+                    { 1, "Study 7 days in a row", "flame_icon", true, "7-Day Streak" },
+                    { 2, "Get 100% on a quiz", "star_icon", true, "Perfect Score" },
+                    { 3, "Learn 100 words", "book_icon", true, "Word Collector" },
+                    { 4, "Finish 20 cards in 5 min", "zap_icon", false, "Speed Learner" },
+                    { 5, "Start a 2nd language", "globe_icon", false, "Polyglot" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Categories",
+                columns: new[] { "Id", "Description", "IsSelected", "Name" },
+                values: new object[,]
+                {
+                    { 1, "Food & Dining Vocabulary", true, "Food" },
+                    { 2, "Travel & Tourism Vocabulary", true, "Travel" },
+                    { 3, "Professional & Work Vocabulary", true, "Business" },
+                    { 4, "Tech & IT Vocabulary", false, "Technology" },
+                    { 5, "Academic & School Vocabulary", false, "Education" },
+                    { 6, "Cinema & Entertainment", false, "Movies" },
+                    { 7, "Music & Songs", false, "Music" },
+                    { 8, "Video Games & Gaming Culture", false, "Gaming" },
+                    { 9, "Sports & Fitness", false, "Sports" },
+                    { 10, "Health & Medicine", false, "Health" },
+                    { 11, "Shopping & Fashion", false, "Shopping" },
+                    { 12, "Family & Relationships", false, "Family" },
+                    { 13, "Nature & Environment", false, "Nature" },
+                    { 14, "Science & Research", false, "Science" },
+                    { 15, "Animals & Wildlife", false, "Animals" }
+                });
 
             migrationBuilder.CreateIndex(
-                name: "IX_QuizOptions_QuizID",
-                table: "QuizOptions",
+                name: "IX_LessonVocabularies_VocabularyWordID",
+                table: "LessonVocabularies",
+                column: "VocabularyWordID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_QuizOption_QuizID",
+                table: "QuizOption",
                 column: "QuizID");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Quizzes_LessonID",
                 table: "Quizzes",
                 column: "LessonID");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UserCategories_CategoryId",
+                table: "UserCategories",
+                column: "CategoryId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserProgresses_LessonID",
@@ -229,10 +329,16 @@ namespace VocabGrid.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "Badges");
+
+            migrationBuilder.DropTable(
                 name: "LessonVocabularies");
 
             migrationBuilder.DropTable(
-                name: "QuizOptions");
+                name: "QuizOption");
+
+            migrationBuilder.DropTable(
+                name: "UserCategories");
 
             migrationBuilder.DropTable(
                 name: "UserProgresses");
@@ -242,6 +348,9 @@ namespace VocabGrid.Migrations
 
             migrationBuilder.DropTable(
                 name: "Quizzes");
+
+            migrationBuilder.DropTable(
+                name: "Categories");
 
             migrationBuilder.DropTable(
                 name: "Users");
