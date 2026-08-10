@@ -45,7 +45,21 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
    ```
    Open `VocabGrid.slnx` or `VocabGrid.csproj`.
 
-3. **Configure** `appsettings.json` (`DefaultConnection`, `Jwt:Key`, `Jwt:Issuer`, `Jwt:Audience`). Prefer User Secrets for `Jwt:Key` in development.
+3. **Configure JWT secret (required — do NOT put secrets in appsettings.json):**
+
+   Development (User Secrets):
+   ```bash
+   cd VocabGrid
+   dotnet user-secrets init
+   dotnet user-secrets set "Jwt:Key" "REPLACE_WITH_A_LONG_RANDOM_SECRET_AT_LEAST_32_CHARS"
+   ```
+
+   Or set an environment variable:
+   - Windows PowerShell: `$env:Jwt__Key = "REPLACE_WITH_A_LONG_RANDOM_SECRET_AT_LEAST_32_CHARS"`
+   - Production / hosting: set `Jwt__Key` in the environment or secret store
+
+   `Jwt:Issuer` and `Jwt:Audience` stay in `appsettings.json`.
+   If `Jwt:Key` is missing, the API will not start.
 
 4. **Apply migrations:**
    ```bash
