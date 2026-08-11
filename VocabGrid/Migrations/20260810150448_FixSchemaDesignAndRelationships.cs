@@ -307,7 +307,7 @@ namespace VocabGrid.Migrations
                         column: x => x.UserId,
                         principalTable: "Users",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.NoAction);
                     table.ForeignKey(
                         name: "FK_StudyActivities_Vocabularies_WordId",
                         column: x => x.WordId,

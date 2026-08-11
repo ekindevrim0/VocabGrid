@@ -71,11 +71,13 @@ namespace VocabGrid.Data
                 .HasForeignKey(lv => lv.WordID)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // NoAction on User: SQL Server rejects Users->UWP and Users->Decks->Vocabularies->UWP both Cascade.
+            // Progress rows still cascade-delete when the Vocabulary (card) is removed with the Deck.
             modelBuilder.Entity<UserWordProgress>()
                 .HasOne(uwp => uwp.User)
                 .WithMany(u => u.UserWordProgresses)
                 .HasForeignKey(uwp => uwp.UserID)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<UserWordProgress>()
                 .HasOne(uwp => uwp.Vocabulary)
@@ -158,12 +160,13 @@ namespace VocabGrid.Data
                 .Property(d => d.Title)
                 .HasMaxLength(50);
 
-            // Figma: kart desteye ait; deck silinince kartlar da silinir
+            // Figma: deck silinince kartlar da silinir. SQL Server multiple-cascade-path
+            // kısıtı nedeniyle DB'de NoAction; EF ClientCascade ile kartları önce siler.
             modelBuilder.Entity<Vocabulary>()
                 .HasOne(v => v.Deck)
                 .WithMany(d => d.Flashcards)
                 .HasForeignKey(v => v.DeckId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.ClientCascade);
 
             modelBuilder.Entity<Quiz>()
                 .HasOne(q => q.Lesson)
@@ -177,11 +180,12 @@ namespace VocabGrid.Data
                 .HasForeignKey(o => o.QuizID)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // NoAction: same SQL Server multiple-cascade-path limit as StudyActivity (via Decks).
             modelBuilder.Entity<QuizSession>()
                 .HasOne(s => s.User)
                 .WithMany(u => u.QuizSessions)
                 .HasForeignKey(s => s.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<QuizSession>()
                 .HasOne(s => s.Lesson)
@@ -213,11 +217,12 @@ namespace VocabGrid.Data
                 .HasForeignKey(a => a.SelectedOptionId)
                 .OnDelete(DeleteBehavior.NoAction);
 
+            // NoAction: SQL Server rejects multiple cascade paths (Users -> StudyActivities and Users -> Decks -> StudyActivities).
             modelBuilder.Entity<StudyActivity>()
                 .HasOne(a => a.User)
                 .WithMany(u => u.StudyActivities)
                 .HasForeignKey(a => a.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<StudyActivity>()
                 .HasOne(a => a.Vocabulary)

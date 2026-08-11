@@ -971,7 +971,7 @@ namespace VocabGrid.Migrations
                     b.HasOne("VocabGrid.Entities.User", "User")
                         .WithMany("QuizSessions")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.Navigation("Deck");
@@ -1021,7 +1021,7 @@ namespace VocabGrid.Migrations
                     b.HasOne("VocabGrid.Entities.User", "User")
                         .WithMany("StudyActivities")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("VocabGrid.Entities.Vocabulary", "Vocabulary")
@@ -1130,7 +1130,7 @@ namespace VocabGrid.Migrations
                     b.HasOne("VocabGrid.Entities.User", "User")
                         .WithMany("UserWordProgresses")
                         .HasForeignKey("UserID")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("VocabGrid.Entities.Vocabulary", "Vocabulary")
@@ -1149,7 +1149,7 @@ namespace VocabGrid.Migrations
                     b.HasOne("VocabGrid.Entities.Deck", "Deck")
                         .WithMany("Flashcards")
                         .HasForeignKey("DeckId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.ClientCascade);
 
                     b.Navigation("Deck");
                 });

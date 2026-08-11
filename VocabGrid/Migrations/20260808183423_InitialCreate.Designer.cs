@@ -554,7 +554,7 @@ namespace VocabGrid.Migrations
                     b.HasOne("VocabGrid.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserID")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
                     b.HasOne("VocabGrid.API.Entities.Vocabulary", "Vocabulary")
