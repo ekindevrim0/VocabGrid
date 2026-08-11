@@ -4,6 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Google.Apis.Auth;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using VocabGrid.DTOs;
 using VocabGrid.Entities;
@@ -15,6 +17,16 @@ namespace VocabGrid.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
+    private const string AppleIssuer = "https://appleid.apple.com";
+    private const string AppleOpenIdConfigurationUrl =
+        "https://appleid.apple.com/.well-known/openid-configuration";
+
+    private static readonly ConfigurationManager<OpenIdConnectConfiguration> AppleConfigurationManager =
+        new(
+            AppleOpenIdConfigurationUrl,
+            new OpenIdConnectConfigurationRetriever(),
+            new HttpDocumentRetriever { RequireHttps = true });
+
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
 
@@ -162,11 +174,11 @@ public class AuthController : ControllerBase
                 "Apple authentication is not configured. Set Authentication:Apple:ClientId.");
         }
 
-        // Apple identity must come from a validated IdToken, never from client-supplied AppleId/Email alone.
+        // Apple identity must come from a JWKS-validated IdToken, never from client-supplied AppleId/Email alone.
         ClaimsPrincipal principal;
         try
         {
-            principal = ValidateAppleIdToken(dto.IdToken, clientId);
+            principal = await ValidateAppleIdTokenAsync(dto.IdToken, clientId);
         }
         catch (SecurityTokenException)
         {
@@ -290,34 +302,30 @@ public class AuthController : ControllerBase
         return (parts[0], parts[1]);
     }
 
-    private static ClaimsPrincipal ValidateAppleIdToken(string idToken, string clientId)
+    private static async Task<ClaimsPrincipal> ValidateAppleIdTokenAsync(string idToken, string clientId)
     {
-        // Structural validation: require signed JWT with expected issuer/audience.
-        // Full JWKS signature verification against Apple keys should be completed before production release.
         var handler = new JwtSecurityTokenHandler();
         if (!handler.CanReadToken(idToken))
         {
             throw new SecurityTokenException("Apple IdToken is not a readable JWT.");
         }
 
-        var jwt = handler.ReadJwtToken(idToken);
-        if (!string.Equals(jwt.Issuer, "https://appleid.apple.com", StringComparison.Ordinal))
-        {
-            throw new SecurityTokenException("Invalid Apple token issuer.");
-        }
+        var appleConfig = await AppleConfigurationManager.GetConfigurationAsync(CancellationToken.None);
 
-        if (!jwt.Audiences.Contains(clientId))
+        var parameters = new TokenValidationParameters
         {
-            throw new SecurityTokenException("Invalid Apple token audience.");
-        }
+            ValidateIssuer = true,
+            ValidIssuer = AppleIssuer,
+            ValidateAudience = true,
+            ValidAudience = clientId,
+            ValidateLifetime = true,
+            RequireExpirationTime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKeys = appleConfig.SigningKeys,
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
 
-        if (jwt.ValidTo < DateTime.UtcNow.AddMinutes(-1))
-        {
-            throw new SecurityTokenException("Apple token is expired.");
-        }
-
-        var identity = new ClaimsIdentity(jwt.Claims, "Apple");
-        return new ClaimsPrincipal(identity);
+        return handler.ValidateToken(idToken, parameters, out _);
     }
 
     private string CreateToken(User user)
