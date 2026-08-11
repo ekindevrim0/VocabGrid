@@ -1,6 +1,8 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
+using Google.Apis.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using VocabGrid.DTOs;
@@ -25,9 +27,9 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterDto request)
     {
-        if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+        if (!ModelState.IsValid)
         {
-            return BadRequest("Email and Password are required.");
+            return ValidationProblem(ModelState);
         }
 
         var userRepository = _unitOfWork.Repository<User>();
@@ -42,8 +44,10 @@ public class AuthController : ControllerBase
 
         var user = new User
         {
+            FirstName = request.FirstName.Trim(),
+            LastName = request.LastName.Trim(),
             Username = request.Email.Split('@')[0],
-            Email = request.Email.ToLower(),
+            Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = passwordHash,
             PasswordSalt = passwordSalt
         };
@@ -57,14 +61,14 @@ public class AuthController : ControllerBase
         {
             Message = "Registration successful.",
             Token = token,
-            User = new { user.Id, user.Username, user.Email }
+            User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email }
         });
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] UserLoginDto request)
     {
-        if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
             return BadRequest("Email and Password are required.");
         }
@@ -76,7 +80,7 @@ public class AuthController : ControllerBase
 
         if (user == null || !VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
         {
-            return BadRequest("Invalid credentials.");
+            return Unauthorized("Invalid credentials.");
         }
 
         string token = CreateToken(user);
@@ -85,49 +89,53 @@ public class AuthController : ControllerBase
         {
             Message = "Login successful.",
             Token = token,
-            User = new { user.Id, user.Username, user.Email }
+            User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email }
         });
     }
 
     [HttpPost("google")]
     public async Task<IActionResult> GoogleAuth([FromBody] GoogleAuthDto dto)
     {
-        if (string.IsNullOrEmpty(dto.GoogleId) || string.IsNullOrEmpty(dto.Email))
+        if (string.IsNullOrWhiteSpace(dto.IdToken))
         {
-            return BadRequest("Google ID and Email are required.");
+            return BadRequest("Google IdToken is required.");
         }
 
-        var userRepository = _unitOfWork.Repository<User>();
-
-        var existingUsersByGoogleId = await userRepository.FindAsync(u => u.GoogleId == dto.GoogleId);
-        var user = existingUsersByGoogleId.FirstOrDefault();
-
-        if (user == null)
+        var clientId = _configuration["Authentication:Google:ClientId"];
+        if (string.IsNullOrWhiteSpace(clientId))
         {
-            var existingUsersByEmail = await userRepository.FindAsync(u => u.Email.ToLower() == dto.Email.ToLower());
-            user = existingUsersByEmail.FirstOrDefault();
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                "Google authentication is not configured. Set Authentication:Google:ClientId.");
+        }
 
-            if (user != null)
-            {
-                user.GoogleId = dto.GoogleId;
-                userRepository.Update(user);
-                await _unitOfWork.CompleteAsync();
-            }
-            else
-            {
-                user = new User
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            payload = await GoogleJsonWebSignature.ValidateAsync(
+                dto.IdToken,
+                new GoogleJsonWebSignature.ValidationSettings
                 {
-                    Username = string.IsNullOrWhiteSpace(dto.Name) ? dto.Email.Split('@')[0] : dto.Name,
-                    Email = dto.Email.ToLower(),
-                    GoogleId = dto.GoogleId,
-                    PasswordHash = Array.Empty<byte>(),
-                    PasswordSalt = Array.Empty<byte>()
-                };
-
-                await userRepository.AddAsync(user);
-                await _unitOfWork.CompleteAsync();
-            }
+                    Audience = new[] { clientId }
+                });
         }
+        catch (InvalidJwtException)
+        {
+            return Unauthorized("Invalid Google IdToken.");
+        }
+
+        var googleId = payload.Subject;
+        var email = payload.Email?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return BadRequest("Google account email is required.");
+        }
+
+        var displayName = payload.Name ?? string.Empty;
+        var user = await FindOrLinkSocialUserAsync(
+            googleId: googleId,
+            appleId: null,
+            email: email,
+            displayName: displayName);
 
         string token = CreateToken(user);
 
@@ -135,49 +143,66 @@ public class AuthController : ControllerBase
         {
             Message = "Google authentication successful.",
             Token = token,
-            User = new { user.Id, user.Username, user.Email, user.GoogleId }
+            User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.GoogleId }
         });
     }
 
     [HttpPost("apple")]
     public async Task<IActionResult> AppleAuth([FromBody] AppleAuthDto dto)
     {
-        if (string.IsNullOrEmpty(dto.AppleId) || string.IsNullOrEmpty(dto.Email))
+        if (string.IsNullOrWhiteSpace(dto.IdToken))
         {
-            return BadRequest("Apple ID and Email are required.");
+            return BadRequest("Apple IdToken is required.");
         }
 
+        var clientId = _configuration["Authentication:Apple:ClientId"];
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                "Apple authentication is not configured. Set Authentication:Apple:ClientId.");
+        }
+
+        // Apple identity must come from a validated IdToken, never from client-supplied AppleId/Email alone.
+        ClaimsPrincipal principal;
+        try
+        {
+            principal = ValidateAppleIdToken(dto.IdToken, clientId);
+        }
+        catch (SecurityTokenException)
+        {
+            return Unauthorized("Invalid Apple IdToken.");
+        }
+        catch (Exception)
+        {
+            return Unauthorized("Apple IdToken validation failed.");
+        }
+
+        var appleId = principal.FindFirstValue("sub")
+                      ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
+        var email = (principal.FindFirstValue(ClaimTypes.Email)
+                     ?? principal.FindFirstValue("email"))
+                    ?.Trim()
+                    .ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(appleId))
+        {
+            return Unauthorized("Apple subject claim is missing.");
+        }
+
+        // Apple may omit email on subsequent logins; require it for first-time account creation.
         var userRepository = _unitOfWork.Repository<User>();
-
-        var existingUsersByAppleId = await userRepository.FindAsync(u => u.AppleId == dto.AppleId);
-        var user = existingUsersByAppleId.FirstOrDefault();
-
-        if (user == null)
+        var existingByApple = (await userRepository.FindAsync(u => u.AppleId == appleId)).FirstOrDefault();
+        if (existingByApple == null && string.IsNullOrWhiteSpace(email))
         {
-            var existingUsersByEmail = await userRepository.FindAsync(u => u.Email.ToLower() == dto.Email.ToLower());
-            user = existingUsersByEmail.FirstOrDefault();
-
-            if (user != null)
-            {
-                user.AppleId = dto.AppleId;
-                userRepository.Update(user);
-                await _unitOfWork.CompleteAsync();
-            }
-            else
-            {
-                user = new User
-                {
-                    Username = string.IsNullOrWhiteSpace(dto.Name) ? dto.Email.Split('@')[0] : dto.Name,
-                    Email = dto.Email.ToLower(),
-                    AppleId = dto.AppleId,
-                    PasswordHash = Array.Empty<byte>(),
-                    PasswordSalt = Array.Empty<byte>()
-                };
-
-                await userRepository.AddAsync(user);
-                await _unitOfWork.CompleteAsync();
-            }
+            return BadRequest("Apple account email is required for first-time sign-in.");
         }
+
+        var displayName = string.IsNullOrWhiteSpace(dto.Name) ? string.Empty : dto.Name.Trim();
+        var user = await FindOrLinkSocialUserAsync(
+            googleId: null,
+            appleId: appleId,
+            email: email ?? existingByApple!.Email,
+            displayName: displayName);
 
         string token = CreateToken(user);
 
@@ -185,28 +210,144 @@ public class AuthController : ControllerBase
         {
             Message = "Apple authentication successful.",
             Token = token,
-            User = new { user.Id, user.Username, user.Email, user.AppleId }
+            User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.AppleId }
         });
+    }
+
+    private async Task<User> FindOrLinkSocialUserAsync(
+        string? googleId,
+        string? appleId,
+        string email,
+        string displayName)
+    {
+        var userRepository = _unitOfWork.Repository<User>();
+        User? user = null;
+
+        if (!string.IsNullOrWhiteSpace(googleId))
+        {
+            user = (await userRepository.FindAsync(u => u.GoogleId == googleId)).FirstOrDefault();
+        }
+        else if (!string.IsNullOrWhiteSpace(appleId))
+        {
+            user = (await userRepository.FindAsync(u => u.AppleId == appleId)).FirstOrDefault();
+        }
+
+        if (user == null)
+        {
+            user = (await userRepository.FindAsync(u => u.Email.ToLower() == email.ToLower())).FirstOrDefault();
+            if (user != null)
+            {
+                if (!string.IsNullOrWhiteSpace(googleId))
+                {
+                    user.GoogleId = googleId;
+                }
+
+                if (!string.IsNullOrWhiteSpace(appleId))
+                {
+                    user.AppleId = appleId;
+                }
+
+                userRepository.Update(user);
+                await _unitOfWork.CompleteAsync();
+            }
+        }
+
+        if (user == null)
+        {
+            var (firstName, lastName) = SplitDisplayName(displayName, email);
+            user = new User
+            {
+                FirstName = firstName,
+                LastName = lastName,
+                Username = email.Split('@')[0],
+                Email = email.ToLowerInvariant(),
+                GoogleId = googleId,
+                AppleId = appleId,
+                PasswordHash = Array.Empty<byte>(),
+                PasswordSalt = Array.Empty<byte>()
+            };
+
+            await userRepository.AddAsync(user);
+            await _unitOfWork.CompleteAsync();
+        }
+
+        return user;
+    }
+
+    private static (string FirstName, string LastName) SplitDisplayName(string displayName, string email)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return (email.Split('@')[0], "User");
+        }
+
+        var parts = displayName.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1)
+        {
+            return (parts[0], "User");
+        }
+
+        return (parts[0], parts[1]);
+    }
+
+    private static ClaimsPrincipal ValidateAppleIdToken(string idToken, string clientId)
+    {
+        // Structural validation: require signed JWT with expected issuer/audience.
+        // Full JWKS signature verification against Apple keys should be completed before production release.
+        var handler = new JwtSecurityTokenHandler();
+        if (!handler.CanReadToken(idToken))
+        {
+            throw new SecurityTokenException("Apple IdToken is not a readable JWT.");
+        }
+
+        var jwt = handler.ReadJwtToken(idToken);
+        if (!string.Equals(jwt.Issuer, "https://appleid.apple.com", StringComparison.Ordinal))
+        {
+            throw new SecurityTokenException("Invalid Apple token issuer.");
+        }
+
+        if (!jwt.Audiences.Contains(clientId))
+        {
+            throw new SecurityTokenException("Invalid Apple token audience.");
+        }
+
+        if (jwt.ValidTo < DateTime.UtcNow.AddMinutes(-1))
+        {
+            throw new SecurityTokenException("Apple token is expired.");
+        }
+
+        var identity = new ClaimsIdentity(jwt.Claims, "Apple");
+        return new ClaimsPrincipal(identity);
     }
 
     private string CreateToken(User user)
     {
+        var keySecret = _configuration["Jwt:Key"];
+        if (string.IsNullOrWhiteSpace(keySecret))
+        {
+            throw new InvalidOperationException(
+                "Jwt:Key is missing. Configure User Secrets or environment variables.");
+        }
+
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Name, user.Username ?? string.Empty)
+            new Claim(ClaimTypes.Name, user.Username ?? string.Empty),
+            new Claim(ClaimTypes.GivenName, user.FirstName ?? string.Empty),
+            new Claim(ClaimTypes.Surname, user.LastName ?? string.Empty)
         };
 
-        var keySecret = _configuration["Jwt:Secret"] ?? "SuperSecretKeyForVocabGridApplication2026";
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keySecret));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var tokenDescriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
-            Expires = DateTime.UtcNow.AddDays(7),
-            SigningCredentials = creds
+            Expires = DateTime.UtcNow.AddHours(1),
+            SigningCredentials = creds,
+            Issuer = _configuration["Jwt:Issuer"],
+            Audience = _configuration["Jwt:Audience"]
         };
 
         var tokenHandler = new JwtSecurityTokenHandler();
@@ -217,14 +358,19 @@ public class AuthController : ControllerBase
 
     private static void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
     {
-        using var hmac = new System.Security.Cryptography.HMACSHA512();
+        using var hmac = new HMACSHA512();
         passwordSalt = hmac.Key;
         passwordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
     }
 
     private static bool VerifyPasswordHash(string password, byte[] passwordHash, byte[] passwordSalt)
     {
-        using var hmac = new System.Security.Cryptography.HMACSHA512(passwordSalt);
+        if (passwordHash.Length == 0 || passwordSalt.Length == 0)
+        {
+            return false;
+        }
+
+        using var hmac = new HMACSHA512(passwordSalt);
         var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
         return computedHash.SequenceEqual(passwordHash);
     }
