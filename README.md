@@ -33,23 +33,22 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/ekindevrim0/GigaMind.git
-   cd GigaMind
+   git clone https://github.com/ekindevrim0/VocabGrid.git
+   cd VocabGrid
    ```
 
-   > GitHub repository URL may still use the old name `GigaMind`. The application name is **VocabGrid** (`VocabGrid.csproj`, namespaces, assembly).
+   > GitHub repo name is **VocabGrid**. Local folder may still be named `GigaMind` if you cloned earlier; the project inside is `VocabGrid/` (`VocabGrid.csproj`).
 
-2. **Open the project** (inside the project folder that contains `VocabGrid.csproj`):
+2. **Open the project** (folder that contains `VocabGrid.csproj`):
    ```bash
-   cd GigaMind
+   cd VocabGrid
    ```
    Open `VocabGrid.slnx` or `VocabGrid.csproj`.
 
 3. **Configure JWT secret (required — do NOT put secrets in appsettings.json):**
 
-   Development (User Secrets):
+   Development (User Secrets) — run inside the project folder from step 2:
    ```bash
-   cd VocabGrid
    dotnet user-secrets init
    dotnet user-secrets set "Jwt:Key" "REPLACE_WITH_A_LONG_RANDOM_SECRET_AT_LEAST_32_CHARS"
    ```
