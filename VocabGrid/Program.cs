@@ -100,6 +100,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("AllowAll");
 
+var webRoot = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+Directory.CreateDirectory(Path.Combine(webRoot, "uploads"));
+app.Environment.WebRootPath ??= webRoot;
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
