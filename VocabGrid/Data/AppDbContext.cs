@@ -331,6 +331,96 @@ namespace VocabGrid.Data
                     Threshold = 2
                 }
             );
+
+            // Sample lessons + quiz bank so QuizController can be exercised in Dev/Swagger.
+            var seedCreatedAt = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            modelBuilder.Entity<Lesson>().HasData(
+                new Lesson
+                {
+                    LessonID = 1,
+                    Title = "Greetings",
+                    Description = "Basic hello and introductions",
+                    Level = "A1",
+                    OrderIndex = 1,
+                    CreatedAt = seedCreatedAt
+                },
+                new Lesson
+                {
+                    LessonID = 2,
+                    Title = "Food Basics",
+                    Description = "Common food and drink words",
+                    Level = "A1",
+                    OrderIndex = 2,
+                    CreatedAt = seedCreatedAt
+                }
+            );
+
+            modelBuilder.Entity<Quiz>().HasData(
+                new Quiz { QuizID = 1, LessonID = 1, QuestionText = "What does 'Merhaba' mean?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
+                new Quiz { QuizID = 2, LessonID = 1, QuestionText = "How do you say 'Good morning' in Turkish?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
+                new Quiz { QuizID = 3, LessonID = 1, QuestionText = "What does 'Teşekkürler' mean?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
+                new Quiz { QuizID = 4, LessonID = 1, QuestionText = "How do you say 'My name is...' in Turkish?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
+                new Quiz { QuizID = 5, LessonID = 1, QuestionText = "What does 'Güle güle' mean?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
+                new Quiz { QuizID = 6, LessonID = 2, QuestionText = "What does 'Elma' mean?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
+                new Quiz { QuizID = 7, LessonID = 2, QuestionText = "How do you say 'Water' in Turkish?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
+                new Quiz { QuizID = 8, LessonID = 2, QuestionText = "What does 'Ekmek' mean?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
+                new Quiz { QuizID = 9, LessonID = 2, QuestionText = "How do you say 'Tea' in Turkish?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
+                new Quiz { QuizID = 10, LessonID = 2, QuestionText = "What does 'Süt' mean?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 }
+            );
+
+            modelBuilder.Entity<QuizOption>().HasData(
+                // Q1 Merhaba
+                new QuizOption { OptionID = 1, QuizID = 1, OptionText = "Hello", IsCorrect = true },
+                new QuizOption { OptionID = 2, QuizID = 1, OptionText = "Goodbye", IsCorrect = false },
+                new QuizOption { OptionID = 3, QuizID = 1, OptionText = "Please", IsCorrect = false },
+                new QuizOption { OptionID = 4, QuizID = 1, OptionText = "Sorry", IsCorrect = false },
+                // Q2 Good morning
+                new QuizOption { OptionID = 5, QuizID = 2, OptionText = "İyi geceler", IsCorrect = false },
+                new QuizOption { OptionID = 6, QuizID = 2, OptionText = "Günaydın", IsCorrect = true },
+                new QuizOption { OptionID = 7, QuizID = 2, OptionText = "İyi akşamlar", IsCorrect = false },
+                new QuizOption { OptionID = 8, QuizID = 2, OptionText = "Hoşça kal", IsCorrect = false },
+                // Q3 Teşekkürler
+                new QuizOption { OptionID = 9, QuizID = 3, OptionText = "You're welcome", IsCorrect = false },
+                new QuizOption { OptionID = 10, QuizID = 3, OptionText = "Thank you", IsCorrect = true },
+                new QuizOption { OptionID = 11, QuizID = 3, OptionText = "Excuse me", IsCorrect = false },
+                new QuizOption { OptionID = 12, QuizID = 3, OptionText = "Congratulations", IsCorrect = false },
+                // Q4 My name is
+                new QuizOption { OptionID = 13, QuizID = 4, OptionText = "Benim adım...", IsCorrect = true },
+                new QuizOption { OptionID = 14, QuizID = 4, OptionText = "Nasılsın?", IsCorrect = false },
+                new QuizOption { OptionID = 15, QuizID = 4, OptionText = "Nerelisin?", IsCorrect = false },
+                new QuizOption { OptionID = 16, QuizID = 4, OptionText = "Kaç yaşındasın?", IsCorrect = false },
+                // Q5 Güle güle
+                new QuizOption { OptionID = 17, QuizID = 5, OptionText = "Welcome", IsCorrect = false },
+                new QuizOption { OptionID = 18, QuizID = 5, OptionText = "Goodbye (to someone leaving)", IsCorrect = true },
+                new QuizOption { OptionID = 19, QuizID = 5, OptionText = "See you tomorrow", IsCorrect = false },
+                new QuizOption { OptionID = 20, QuizID = 5, OptionText = "Good night", IsCorrect = false },
+                // Q6 Elma
+                new QuizOption { OptionID = 21, QuizID = 6, OptionText = "Banana", IsCorrect = false },
+                new QuizOption { OptionID = 22, QuizID = 6, OptionText = "Apple", IsCorrect = true },
+                new QuizOption { OptionID = 23, QuizID = 6, OptionText = "Orange", IsCorrect = false },
+                new QuizOption { OptionID = 24, QuizID = 6, OptionText = "Grape", IsCorrect = false },
+                // Q7 Water
+                new QuizOption { OptionID = 25, QuizID = 7, OptionText = "Su", IsCorrect = true },
+                new QuizOption { OptionID = 26, QuizID = 7, OptionText = "Çay", IsCorrect = false },
+                new QuizOption { OptionID = 27, QuizID = 7, OptionText = "Kahve", IsCorrect = false },
+                new QuizOption { OptionID = 28, QuizID = 7, OptionText = "Süt", IsCorrect = false },
+                // Q8 Ekmek
+                new QuizOption { OptionID = 29, QuizID = 8, OptionText = "Cheese", IsCorrect = false },
+                new QuizOption { OptionID = 30, QuizID = 8, OptionText = "Bread", IsCorrect = true },
+                new QuizOption { OptionID = 31, QuizID = 8, OptionText = "Rice", IsCorrect = false },
+                new QuizOption { OptionID = 32, QuizID = 8, OptionText = "Meat", IsCorrect = false },
+                // Q9 Tea
+                new QuizOption { OptionID = 33, QuizID = 9, OptionText = "Kahve", IsCorrect = false },
+                new QuizOption { OptionID = 34, QuizID = 9, OptionText = "Su", IsCorrect = false },
+                new QuizOption { OptionID = 35, QuizID = 9, OptionText = "Çay", IsCorrect = true },
+                new QuizOption { OptionID = 36, QuizID = 9, OptionText = "Meyve suyu", IsCorrect = false },
+                // Q10 Süt
+                new QuizOption { OptionID = 37, QuizID = 10, OptionText = "Milk", IsCorrect = true },
+                new QuizOption { OptionID = 38, QuizID = 10, OptionText = "Sugar", IsCorrect = false },
+                new QuizOption { OptionID = 39, QuizID = 10, OptionText = "Salt", IsCorrect = false },
+                new QuizOption { OptionID = 40, QuizID = 10, OptionText = "Honey", IsCorrect = false }
+            );
         }
     }
 }

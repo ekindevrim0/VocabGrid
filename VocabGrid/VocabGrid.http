@@ -5,8 +5,9 @@ Accept: application/json
 
 ###
 
-GET {{VocabGrid_HostAddress}}/api/Badges
+GET {{VocabGrid_HostAddress}}/api/Achievements
 Accept: application/json
+Authorization: Bearer {{token}}
 
 ###
 
