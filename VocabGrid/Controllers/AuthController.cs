@@ -111,6 +111,11 @@ public async Task<IActionResult> Login([FromBody] UserLoginDto request)
    [HttpPost("refresh")]
 public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequestDto request)
 {
+    if (string.IsNullOrEmpty(request.RefreshToken))
+    {
+        return BadRequest("Refresh token is required.");
+    }
+
     var userRepository = _unitOfWork.Repository<User>();
     
     // Find the user who owns this exact refresh token
@@ -125,9 +130,18 @@ public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequestDto reque
     // Generate a new access token
     var newToken = CreateToken(user);
 
+    // Generate a new refresh token and extend expiry time
+    var newRefreshToken = Guid.NewGuid().ToString("N");
+    user.RefreshToken = newRefreshToken;
+    user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+
+    // Save changes to database
+    await _unitOfWork.CompleteAsync();
+
     return Ok(new
     {
-        Token = newToken
+        Token = newToken,
+        RefreshToken = newRefreshToken
     });
 }
 
