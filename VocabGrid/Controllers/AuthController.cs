@@ -105,6 +105,71 @@ public class AuthController : ControllerBase
         });
     }
 
+    [HttpPost("forgot-password")]
+public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto request, [FromServices] IEmailService emailService)
+{
+    if (string.IsNullOrEmpty(request.Email))
+        return BadRequest("Email is required.");
+
+    var userRepository = _unitOfWork.Repository<User>();
+    var users = await userRepository.FindAsync(u => u.Email == request.Email);
+    var user = users.FirstOrDefault();
+
+    // Return Ok even if user isn't found to prevent email enumeration
+    if (user == null)
+        return Ok(new { Message = "If an account exists, a password reset token has been generated." });
+
+    var resetToken = Guid.NewGuid().ToString("N");
+
+    // Change ExpiryTime to ExpiresAt
+var tokenEntity = new PasswordResetToken
+{
+    UserId = user.Id,
+    Token = resetToken,
+    ExpiresAt = DateTime.UtcNow.AddMinutes(15), // 👈 Updated here
+    IsUsed = false
+};
+
+    var tokenRepository = _unitOfWork.Repository<PasswordResetToken>();
+    await tokenRepository.AddAsync(tokenEntity);
+    await _unitOfWork.CompleteAsync();
+
+    await emailService.SendPasswordResetEmailAsync(user.Email, resetToken);
+
+    return Ok(new { Message = "If an account exists, a password reset token has been generated." });
+}
+
+[HttpPost("reset-password")]
+public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto request)
+{
+    if (string.IsNullOrEmpty(request.Token) || string.IsNullOrEmpty(request.NewPassword))
+        return BadRequest("Token and new password are required.");
+
+    var tokenRepository = _unitOfWork.Repository<PasswordResetToken>();
+    var tokens = await tokenRepository.FindAsync(t => t.Token == request.Token);
+    var resetToken = tokens.FirstOrDefault();
+// Change ExpiryTime to ExpiresAt
+if (resetToken == null || resetToken.IsUsed || resetToken.ExpiresAt <= DateTime.UtcNow) // 👈 Updated here
+    return BadRequest("Invalid, expired, or already used password reset token.");
+    var userRepository = _unitOfWork.Repository<User>();
+    var user = await userRepository.GetByIdAsync(resetToken.UserId);
+
+    if (user == null)
+        return BadRequest("Associated user not found.");
+
+    // Update password hash/salt using your existing hashing method
+    CreatePasswordHash(request.NewPassword, out byte[] passwordHash, out byte[] passwordSalt);
+    user.PasswordHash = passwordHash;
+    user.PasswordSalt = passwordSalt;
+
+    // Mark token as used
+    resetToken.IsUsed = true;
+
+    await _unitOfWork.CompleteAsync();
+
+    return Ok(new { Message = "Password has been successfully reset." });
+}
+
     [HttpPost("google")]
     public async Task<IActionResult> GoogleAuth([FromBody] GoogleAuthDto dto)
     {
@@ -225,71 +290,7 @@ public class AuthController : ControllerBase
             User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.AppleId }
         });
     }
-[HttpPost("forgot-password")]
-public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto request, [FromServices] IEmailService emailService)
-{
-    if (string.IsNullOrEmpty(request.Email))
-        return BadRequest("Email is required.");
 
-    var userRepository = _unitOfWork.Repository<User>();
-    var users = await userRepository.FindAsync(u => u.Email == request.Email);
-    var user = users.FirstOrDefault();
-
-    // Return Ok even if user isn't found to prevent email enumeration
-    if (user == null)
-        return Ok(new { Message = "If an account exists, a password reset token has been generated." });
-
-    var resetToken = Guid.NewGuid().ToString("N");
-
-   // Change ExpiryTime to ExpiresAt
-var tokenEntity = new PasswordResetToken
-{
-    UserId = user.Id,
-    Token = resetToken,
-    ExpiresAt = DateTime.UtcNow.AddMinutes(15), // 👈 Updated here
-    IsUsed = false
-};
-
-    var tokenRepository = _unitOfWork.Repository<PasswordResetToken>();
-    await tokenRepository.AddAsync(tokenEntity);
-    await _unitOfWork.CompleteAsync();
-
-    await emailService.SendPasswordResetEmailAsync(user.Email, resetToken);
-
-    return Ok(new { Message = "If an account exists, a password reset token has been generated." });
-}
-
-[HttpPost("reset-password")]
-public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto request)
-{
-    if (string.IsNullOrEmpty(request.Token) || string.IsNullOrEmpty(request.NewPassword))
-        return BadRequest("Token and new password are required.");
-
-    var tokenRepository = _unitOfWork.Repository<PasswordResetToken>();
-    var tokens = await tokenRepository.FindAsync(t => t.Token == request.Token);
-    var resetToken = tokens.FirstOrDefault();
-
-   // Change ExpiryTime to ExpiresAt
-if (resetToken == null || resetToken.IsUsed || resetToken.ExpiresAt <= DateTime.UtcNow) // 👈 Updated here
-    return BadRequest("Invalid, expired, or already used password reset token.");
-    var userRepository = _unitOfWork.Repository<User>();
-    var user = await userRepository.GetByIdAsync(resetToken.UserId);
-
-    if (user == null)
-        return BadRequest("Associated user not found.");
-
-    // Update password hash/salt using your existing hashing method
-    CreatePasswordHash(request.NewPassword, out byte[] passwordHash, out byte[] passwordSalt);
-    user.PasswordHash = passwordHash;
-    user.PasswordSalt = passwordSalt;
-
-    // Mark token as used
-    resetToken.IsUsed = true;
-
-    await _unitOfWork.CompleteAsync();
-
-    return Ok(new { Message = "Password has been successfully reset." });
-}
     private async Task<User> FindOrLinkSocialUserAsync(
         string? googleId,
         string? appleId,
