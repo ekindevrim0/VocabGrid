@@ -20,6 +20,8 @@ public class AuthController : ControllerBase
     private const string AppleIssuer = "https://appleid.apple.com";
     private const string AppleOpenIdConfigurationUrl =
         "https://appleid.apple.com/.well-known/openid-configuration";
+    private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
+    private static readonly TimeSpan PasswordResetLifetime = TimeSpan.FromHours(1);
 
     private static readonly ConfigurationManager<OpenIdConnectConfiguration> AppleConfigurationManager =
         new(
@@ -29,11 +31,19 @@ public class AuthController : ControllerBase
 
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
+    private readonly IEmailService _emailService;
+    private readonly IHostEnvironment _environment;
 
-    public AuthController(IUnitOfWork unitOfWork, IConfiguration configuration)
+    public AuthController(
+        IUnitOfWork unitOfWork,
+        IConfiguration configuration,
+        IEmailService emailService,
+        IHostEnvironment environment)
     {
         _unitOfWork = unitOfWork;
         _configuration = configuration;
+        _emailService = emailService;
+        _environment = environment;
     }
 
     [HttpPost("register")]
@@ -61,20 +71,15 @@ public class AuthController : ControllerBase
             Username = request.Email.Split('@')[0],
             Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = passwordHash,
-            PasswordSalt = passwordSalt
+            PasswordSalt = passwordSalt,
+            Settings = new UserSettings()
         };
 
         await userRepository.AddAsync(user);
+        await IssueRefreshTokenAsync(user);
         await _unitOfWork.CompleteAsync();
 
-        string token = CreateToken(user);
-
-        return Ok(new
-        {
-            Message = "Registration successful.",
-            Token = token,
-            User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email }
-        });
+        return Ok(BuildAuthResponse("Registration successful.", user));
     }
 
     [HttpPost("login")]
@@ -86,8 +91,7 @@ public class AuthController : ControllerBase
         }
 
         var userRepository = _unitOfWork.Repository<User>();
-
-        var users = await userRepository.FindAsync(u => u.Email.ToLower() == request.Email.ToLower());
+        var users = await userRepository.FindAsync(u => u.Email.ToLower() == request.Email.Trim().ToLowerInvariant());
         var user = users.FirstOrDefault();
 
         if (user == null || !VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
@@ -95,14 +99,123 @@ public class AuthController : ControllerBase
             return Unauthorized("Invalid credentials.");
         }
 
-        string token = CreateToken(user);
+        await IssueRefreshTokenAsync(user);
+        userRepository.Update(user);
+        await _unitOfWork.CompleteAsync();
+
+        return Ok(BuildAuthResponse("Login successful.", user));
+    }
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
+        {
+            return BadRequest("Refresh token is required.");
+        }
+
+        var userRepository = _unitOfWork.Repository<User>();
+        var users = await userRepository.FindAsync(u => u.RefreshToken == request.RefreshToken);
+        var user = users.FirstOrDefault();
+
+        if (user is null || user.RefreshTokenExpiryTime is null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+        {
+            return Unauthorized("Invalid or expired refresh token.");
+        }
+
+        await IssueRefreshTokenAsync(user);
+        userRepository.Update(user);
+        await _unitOfWork.CompleteAsync();
 
         return Ok(new
         {
-            Message = "Login successful.",
-            Token = token,
-            User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email }
+            Token = CreateToken(user),
+            RefreshToken = user.RefreshToken,
+            RefreshTokenExpiryTime = user.RefreshTokenExpiryTime
         });
+    }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var user = (await _unitOfWork.Repository<User>()
+            .FindAsync(u => u.Email.ToLower() == normalizedEmail)).FirstOrDefault();
+
+        // Always return the same client message (anti-enumeration).
+        const string clientMessage = "If an account exists, a password reset token has been generated.";
+
+        if (user is null)
+        {
+            return Ok(new { Message = clientMessage });
+        }
+
+        var resetToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        var tokenEntity = new PasswordResetToken
+        {
+            UserId = user.Id,
+            Token = resetToken,
+            ExpiresAt = DateTime.UtcNow.Add(PasswordResetLifetime),
+            IsUsed = false
+        };
+
+        await _unitOfWork.Repository<PasswordResetToken>().AddAsync(tokenEntity);
+        await _unitOfWork.CompleteAsync();
+        await _emailService.SendPasswordResetEmailAsync(user.Email, resetToken);
+
+        if (_environment.IsDevelopment())
+        {
+            // Swagger/local testing only — never expose tokens outside Development.
+            return Ok(new { Message = clientMessage, DevResetToken = resetToken });
+        }
+
+        return Ok(new { Message = clientMessage });
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var tokenRepository = _unitOfWork.Repository<PasswordResetToken>();
+        var tokenEntity = (await tokenRepository.FindAsync(t =>
+            t.Token == request.Token &&
+            !t.IsUsed &&
+            t.ExpiresAt > DateTime.UtcNow)).FirstOrDefault();
+
+        if (tokenEntity is null)
+        {
+            return BadRequest("Invalid, expired, or already used password reset token.");
+        }
+
+        var userRepository = _unitOfWork.Repository<User>();
+        var user = await userRepository.GetByIdAsync(tokenEntity.UserId);
+        if (user is null)
+        {
+            return BadRequest("Invalid, expired, or already used password reset token.");
+        }
+
+        CreatePasswordHash(request.NewPassword, out byte[] passwordHash, out byte[] passwordSalt);
+        user.PasswordHash = passwordHash;
+        user.PasswordSalt = passwordSalt;
+        user.RefreshToken = null;
+        user.RefreshTokenExpiryTime = null;
+
+        tokenEntity.IsUsed = true;
+
+        userRepository.Update(user);
+        tokenRepository.Update(tokenEntity);
+        await _unitOfWork.CompleteAsync();
+
+        return Ok(new { Message = "Password has been successfully reset." });
     }
 
     [HttpPost("google")]
@@ -149,14 +262,11 @@ public class AuthController : ControllerBase
             email: email,
             displayName: displayName);
 
-        string token = CreateToken(user);
+        await IssueRefreshTokenAsync(user);
+        _unitOfWork.Repository<User>().Update(user);
+        await _unitOfWork.CompleteAsync();
 
-        return Ok(new
-        {
-            Message = "Google authentication successful.",
-            Token = token,
-            User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.GoogleId }
-        });
+        return Ok(BuildAuthResponse("Google authentication successful.", user, includeGoogleId: true));
     }
 
     [HttpPost("apple")]
@@ -174,7 +284,6 @@ public class AuthController : ControllerBase
                 "Apple authentication is not configured. Set Authentication:Apple:ClientId.");
         }
 
-        // Apple identity must come from a JWKS-validated IdToken, never from client-supplied AppleId/Email alone.
         ClaimsPrincipal principal;
         try
         {
@@ -201,7 +310,6 @@ public class AuthController : ControllerBase
             return Unauthorized("Apple subject claim is missing.");
         }
 
-        // Apple may omit email on subsequent logins; require it for first-time account creation.
         var userRepository = _unitOfWork.Repository<User>();
         var existingByApple = (await userRepository.FindAsync(u => u.AppleId == appleId)).FirstOrDefault();
         if (existingByApple == null && string.IsNullOrWhiteSpace(email))
@@ -216,14 +324,11 @@ public class AuthController : ControllerBase
             email: email ?? existingByApple!.Email,
             displayName: displayName);
 
-        string token = CreateToken(user);
+        await IssueRefreshTokenAsync(user);
+        userRepository.Update(user);
+        await _unitOfWork.CompleteAsync();
 
-        return Ok(new
-        {
-            Message = "Apple authentication successful.",
-            Token = token,
-            User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.AppleId }
-        });
+        return Ok(BuildAuthResponse("Apple authentication successful.", user, includeAppleId: true));
     }
 
     private async Task<User> FindOrLinkSocialUserAsync(
@@ -276,7 +381,8 @@ public class AuthController : ControllerBase
                 GoogleId = googleId,
                 AppleId = appleId,
                 PasswordHash = Array.Empty<byte>(),
-                PasswordSalt = Array.Empty<byte>()
+                PasswordSalt = Array.Empty<byte>(),
+                Settings = new UserSettings()
             };
 
             await userRepository.AddAsync(user);
@@ -284,6 +390,35 @@ public class AuthController : ControllerBase
         }
 
         return user;
+    }
+
+    private Task IssueRefreshTokenAsync(User user)
+    {
+        user.RefreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        user.RefreshTokenExpiryTime = DateTime.UtcNow.Add(RefreshTokenLifetime);
+        return Task.CompletedTask;
+    }
+
+    private object BuildAuthResponse(
+        string message,
+        User user,
+        bool includeGoogleId = false,
+        bool includeAppleId = false)
+    {
+        object userPayload = includeGoogleId
+            ? new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.GoogleId }
+            : includeAppleId
+                ? new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.AppleId }
+                : new { user.Id, user.FirstName, user.LastName, user.Username, user.Email };
+
+        return new
+        {
+            Message = message,
+            Token = CreateToken(user),
+            RefreshToken = user.RefreshToken,
+            RefreshTokenExpiryTime = user.RefreshTokenExpiryTime,
+            User = userPayload
+        };
     }
 
     private static (string FirstName, string LastName) SplitDisplayName(string displayName, string email)
