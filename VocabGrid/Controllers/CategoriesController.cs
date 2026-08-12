@@ -1,25 +1,32 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using VocabGrid.Data;
 using VocabGrid.Entities;
+using VocabGrid.Interfaces;
 
-namespace VocabGrid.Controllers
+namespace VocabGrid.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class CategoriesController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class CategoriesController : ControllerBase
+    private readonly IUnitOfWork _unitOfWork;
+
+    public CategoriesController(IUnitOfWork unitOfWork)
     {
-        private readonly AppDbContext _context;
+        _unitOfWork = unitOfWork;
+    }
 
-        public CategoriesController(AppDbContext context)
-        {
-            _context = context;
-        }
+    [HttpGet]
+    public async Task<IActionResult> GetCategories()
+    {
+        var categories = (await _unitOfWork.Repository<Category>().GetAllAsync())
+            .OrderBy(category => category.Id)
+            .Select(category => new
+            {
+                category.Id,
+                category.Name,
+                category.Description
+            });
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Category>>> GetCategories()
-        {
-            return await _context.Categories.ToListAsync();
-        }
+        return Ok(categories);
     }
 }
