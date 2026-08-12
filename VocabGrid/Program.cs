@@ -7,6 +7,7 @@ using Microsoft.OpenApi.Models;
 using VocabGrid.Data;
 using VocabGrid.Interfaces;
 using VocabGrid.Repositories;
+using VocabGrid.Services; // 👈 Added
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,6 +64,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<IEmailService, EmailService>(); // 👈 Added
 
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey))
