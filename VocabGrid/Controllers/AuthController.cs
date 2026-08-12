@@ -104,6 +104,33 @@ public class AuthController : ControllerBase
             User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email }
         });
     }
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+    {
+    var user = (await _unitOfWork.Repository<User>()
+        .FindAsync(u => u.Email == dto.Email)).FirstOrDefault();
+
+    if (user == null)
+        return NotFound("User with this email does not exist.");
+
+    // Generate token logic / send email logic goes here
+
+    return Ok(new { message = "Password reset link sent to email." });
+  }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+    {
+    var user = (await _unitOfWork.Repository<User>()
+        .FindAsync(u => u.Email == dto.Email)).FirstOrDefault();
+
+    if (user == null)
+        return NotFound("Invalid request.");
+
+    // Validate token and update password logic goes here
+
+    return Ok(new { message = "Password successfully reset." });
+}
 
     [HttpPost("google")]
     public async Task<IActionResult> GoogleAuth([FromBody] GoogleAuthDto dto)
