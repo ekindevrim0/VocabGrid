@@ -10,7 +10,6 @@ using Microsoft.IdentityModel.Tokens;
 using VocabGrid.DTOs;
 using VocabGrid.Entities;
 using VocabGrid.Interfaces;
-
 namespace VocabGrid.Controllers;
 
 [ApiController]
@@ -52,8 +51,7 @@ public class AuthController : ControllerBase
             return BadRequest("User with this email already exists.");
         }
 
-        CreatePasswordHash(request.Password, out byte[] passwordHash, out byte[] passwordSalt);
-
+CreatePasswordHash(request.Password, out byte[] passwordHash, out byte[] passwordSalt);
         var user = new User
         {
             FirstName = request.FirstName.Trim(),
@@ -78,32 +76,63 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
-    public async Task<IActionResult> Login([FromBody] UserLoginDto request)
+public async Task<IActionResult> Login([FromBody] UserLoginDto request)
+{
+    var userRepository = _unitOfWork.Repository<User>();
+    var users = await userRepository.FindAsync(u => u.Email == request.Email.Trim().ToLowerInvariant());
+    var user = users.FirstOrDefault();
+
+    if (user == null || !VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
     {
-        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
-        {
-            return BadRequest("Email and Password are required.");
-        }
-
-        var userRepository = _unitOfWork.Repository<User>();
-
-        var users = await userRepository.FindAsync(u => u.Email.ToLower() == request.Email.ToLower());
-        var user = users.FirstOrDefault();
-
-        if (user == null || !VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
-        {
-            return Unauthorized("Invalid credentials.");
-        }
-
-        string token = CreateToken(user);
-
-        return Ok(new
-        {
-            Message = "Login successful.",
-            Token = token,
-            User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email }
-        });
+        return BadRequest("Invalid email or password.");
     }
+
+    // 1. Generate Access Token
+    string token = CreateToken(user);
+
+    // 2. Generate Refresh Token and save to Database
+    string refreshToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+    user.RefreshToken = refreshToken;
+    user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7); // Valid for 7 days
+
+    await _unitOfWork.CompleteAsync();
+
+    // 3. Return BOTH tokens in response
+    return Ok(new
+    {
+        Message = "Login successful.",
+        Token = token,
+        RefreshToken = refreshToken, // <--- Added this!
+        User = new { user.Id, user.FirstName, user.LastName, user.Username, user.Email }
+    });
+}
+    
+
+   [HttpPost("refresh")]
+public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequestDto request)
+{
+    var userRepository = _unitOfWork.Repository<User>();
+    
+    // Find the user who owns this exact refresh token
+    var users = await userRepository.FindAsync(u => u.RefreshToken == request.RefreshToken);
+    var user = users.FirstOrDefault();
+
+    if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+    {
+        return BadRequest("Invalid or expired refresh token.");
+    }
+
+    // Generate a new access token
+    var newToken = CreateToken(user);
+
+    return Ok(new
+    {
+        Token = newToken
+    });
+}
+
+
+
 
     [HttpPost("google")]
     public async Task<IActionResult> GoogleAuth([FromBody] GoogleAuthDto dto)
@@ -363,13 +392,12 @@ public class AuthController : ControllerBase
 
         return tokenHandler.WriteToken(token);
     }
-
     private static void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
-    {
-        using var hmac = new HMACSHA512();
-        passwordSalt = hmac.Key;
-        passwordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
-    }
+{
+    using var hmac = new HMACSHA512();
+    passwordSalt = hmac.Key;
+    passwordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
+}
 
     private static bool VerifyPasswordHash(string password, byte[] passwordHash, byte[] passwordSalt)
     {
@@ -382,4 +410,5 @@ public class AuthController : ControllerBase
         var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
         return computedHash.SequenceEqual(passwordHash);
     }
-}
+
+} 
