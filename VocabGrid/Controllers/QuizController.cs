@@ -13,6 +13,7 @@ namespace VocabGrid.Controllers;
 [Authorize]
 public class QuizController : ControllerBase
 {
+    private const int LessonCompletionScore = 80;
     private readonly IUnitOfWork _unitOfWork;
 
     public QuizController(IUnitOfWork unitOfWork)
@@ -78,7 +79,13 @@ public class QuizController : ControllerBase
             UserId = userId.Value,
             LessonId = lesson.LessonID,
             TotalQuestions = questions.Count,
-            StartedAt = DateTime.UtcNow
+            StartedAt = DateTime.UtcNow,
+            // Persist the selected set before any answer can be submitted. This prevents a
+            // client from submitting an arbitrary question from the same lesson later.
+            Answers = questions.Select(question => new QuizSessionAnswer
+            {
+                QuizId = question.QuizID
+            }).ToList()
         };
 
         await _unitOfWork.Repository<QuizSession>().AddAsync(session);
@@ -126,7 +133,7 @@ public class QuizController : ControllerBase
             session.ScorePoints,
             session.StartedAt,
             session.CompletedAt,
-            AnsweredQuestions = answers.Count,
+            AnsweredQuestions = answers.Count(IsAnswered),
             Answers = answers.Select(answer => new
             {
                 answer.QuizId,
@@ -173,7 +180,13 @@ public class QuizController : ControllerBase
 
         var answerRepository = _unitOfWork.Repository<QuizSessionAnswer>();
         var existingAnswers = (await answerRepository.FindAsync(answer => answer.QuizSessionId == session.Id)).ToList();
-        if (existingAnswers.Any(answer => answer.QuizId == dto.QuizId))
+        var sessionAnswer = existingAnswers.FirstOrDefault(answer => answer.QuizId == dto.QuizId);
+        if (sessionAnswer is null)
+        {
+            return BadRequest("The question is not part of this quiz session.");
+        }
+
+        if (IsAnswered(sessionAnswer))
         {
             return BadRequest("This question has already been answered in the session.");
         }
@@ -204,16 +217,12 @@ public class QuizController : ControllerBase
         var pointsEarned = isCorrect ? quiz.Points : 0;
         var submittedAt = DateTime.UtcNow;
 
-        await answerRepository.AddAsync(new QuizSessionAnswer
-        {
-            QuizSessionId = session.Id,
-            QuizId = quiz.QuizID,
-            SelectedOptionId = selectedOption?.OptionID,
-            IsCorrect = dto.Skip ? null : isCorrect,
-            IsSkipped = dto.Skip,
-            TimeSpentSeconds = dto.TimeSpentSeconds,
-            PointsEarned = pointsEarned
-        });
+        sessionAnswer.SelectedOptionId = selectedOption?.OptionID;
+        sessionAnswer.IsCorrect = dto.Skip ? null : isCorrect;
+        sessionAnswer.IsSkipped = dto.Skip;
+        sessionAnswer.TimeSpentSeconds = dto.TimeSpentSeconds;
+        sessionAnswer.PointsEarned = pointsEarned;
+        answerRepository.Update(sessionAnswer);
 
         if (dto.Skip)
         {
@@ -229,7 +238,7 @@ public class QuizController : ControllerBase
         }
 
         session.ScorePoints += pointsEarned;
-        var isComplete = existingAnswers.Count + 1 >= session.TotalQuestions;
+        var isComplete = existingAnswers.All(IsAnswered);
         if (isComplete)
         {
             session.CompletedAt = submittedAt;
@@ -250,7 +259,7 @@ public class QuizController : ControllerBase
         };
         await _unitOfWork.Repository<StudyActivity>().AddAsync(activity);
 
-        user.TotalXp += pointsEarned;
+        StudyEngine.ApplyXp(user, pointsEarned);
         await StudyEngine.UpdateStreakAsync(_unitOfWork, user, submittedAt);
 
         var newlyUnlocked = isComplete
@@ -293,12 +302,14 @@ public class QuizController : ControllerBase
                 UserID = userId,
                 LessonID = session.LessonId.Value,
                 Score = score,
+                Completed = score >= LessonCompletionScore,
                 LastAccess = completedAt
             });
             return;
         }
 
         progress.Score = Math.Max(progress.Score, score);
+        progress.Completed |= score >= LessonCompletionScore;
         progress.LastAccess = completedAt;
         progressRepository.Update(progress);
     }
@@ -324,6 +335,9 @@ public class QuizController : ControllerBase
                 .Select(option => new { OptionId = option.OptionID, option.OptionText })
         });
     }
+
+    private static bool IsAnswered(QuizSessionAnswer answer)
+        => answer.IsSkipped || answer.IsCorrect.HasValue;
 
     private int? TryGetUserId()
     {

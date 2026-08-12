@@ -114,7 +114,7 @@ public class ProgressController : ControllerBase
         };
         await _unitOfWork.Repository<StudyActivity>().AddAsync(activity);
 
-        user.TotalXp += activity.XpEarned;
+        StudyEngine.ApplyXp(user, activity.XpEarned);
         await StudyEngine.UpdateStreakAsync(_unitOfWork, user, occurredAt);
         var newlyUnlocked = await AchievementEvaluator.UnlockEligibleAsync(_unitOfWork, user, activity);
         await _unitOfWork.CompleteAsync();
@@ -155,13 +155,21 @@ public class ProgressController : ControllerBase
                     .FindAsync(deck => deck.UserId == userId.Value))
                 .Select(deck => deck.Id)
                 .ToArray();
-        if (deckIds.Length == 0)
-        {
-            return Ok(Array.Empty<object>());
-        }
+
+        // A deckless card is reviewable only when it belongs to the shared lesson
+        // curriculum. Orphaned deckless records are never exposed for review.
+        var includeCurriculum = deckId is null;
+        var curriculumWordIds = includeCurriculum
+            ? (await _unitOfWork.Repository<LessonVocabulary>().GetAllAsync())
+                .Select(link => link.WordID)
+                .Distinct()
+                .ToArray()
+            : Array.Empty<int>();
 
         var words = await _unitOfWork.Repository<Vocabulary>()
-            .FindAsync(word => word.DeckId != null && deckIds.Contains(word.DeckId.Value));
+            .FindAsync(word =>
+                (word.DeckId != null && deckIds.Contains(word.DeckId.Value)) ||
+                (includeCurriculum && word.DeckId == null && curriculumWordIds.Contains(word.WordID)));
         var now = DateTime.UtcNow;
         var progressesByWord = (await _unitOfWork.Repository<UserWordProgress>()
                 .FindAsync(progress => progress.UserID == userId.Value))
@@ -216,9 +224,9 @@ public class ProgressController : ControllerBase
             return NotFound("Flashcard not found.");
         }
 
-        if (word.DeckId is not null && !await IsDeckOwnedByUserAsync(word.DeckId.Value, userId.Value))
+        if (!await IsReviewableByUserAsync(word, userId.Value))
         {
-            return NotFound("Flashcard not found.");
+            return NotFound("Flashcard is not available for review.");
         }
 
         var user = await _unitOfWork.Repository<User>().GetByIdAsync(userId.Value);
@@ -271,7 +279,7 @@ public class ProgressController : ControllerBase
         var xpEarned = dto.Rating switch
         {
             "Easy" => 2,
-            "Good" => 1,
+            "Medium" => 1,
             "Hard" => 1,
             _ => 0
         };
@@ -288,7 +296,7 @@ public class ProgressController : ControllerBase
         };
         await _unitOfWork.Repository<StudyActivity>().AddAsync(activity);
 
-        user.TotalXp += xpEarned;
+        StudyEngine.ApplyXp(user, xpEarned);
         await StudyEngine.UpdateStreakAsync(_unitOfWork, user, reviewedAt);
         var newlyUnlocked = await AchievementEvaluator.UnlockEligibleAsync(_unitOfWork, user, activity);
         await _unitOfWork.CompleteAsync();
@@ -337,6 +345,18 @@ public class ProgressController : ControllerBase
     {
         var deck = await _unitOfWork.Repository<Deck>().GetByIdAsync(deckId);
         return deck?.UserId == userId;
+    }
+
+    private async Task<bool> IsReviewableByUserAsync(Vocabulary word, int userId)
+    {
+        if (word.DeckId is not null)
+        {
+            return await IsDeckOwnedByUserAsync(word.DeckId.Value, userId);
+        }
+
+        return (await _unitOfWork.Repository<LessonVocabulary>()
+                .FindAsync(link => link.WordID == word.WordID))
+            .Any();
     }
 
     private int? TryGetUserId()

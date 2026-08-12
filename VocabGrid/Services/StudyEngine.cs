@@ -7,6 +7,8 @@ public sealed record ReviewSchedule(int IntervalDays, double EaseFactor, DateTim
 
 public static class StudyEngine
 {
+    public const int XpPerLevel = 100;
+
     public static ReviewSchedule CalculateReviewSchedule(
         int currentIntervalDays,
         double currentEaseFactor,
@@ -24,7 +26,7 @@ public static class StudyEngine
                 Math.Max(1.3, ease - 0.15),
                 reviewedAt.AddDays(Math.Max(1, interval == 0 ? 1 : (int)Math.Ceiling(interval * 1.2))),
                 0),
-            "Good" => new ReviewSchedule(
+            "Medium" => new ReviewSchedule(
                 interval == 0 ? 1 : Math.Max(1, (int)Math.Round(interval * ease)),
                 ease,
                 reviewedAt.AddDays(interval == 0 ? 1 : Math.Max(1, (int)Math.Round(interval * ease))),
@@ -36,6 +38,12 @@ public static class StudyEngine
                 2),
             _ => throw new ArgumentOutOfRangeException(nameof(rating), "Unsupported review rating.")
         };
+    }
+
+    public static void ApplyXp(User user, int xpEarned)
+    {
+        user.TotalXp = Math.Max(0, user.TotalXp + xpEarned);
+        user.Level = Math.Max(1, user.TotalXp / XpPerLevel + 1);
     }
 
     public static async Task UpdateStreakAsync(IUnitOfWork unitOfWork, User user, DateTime activityDate)

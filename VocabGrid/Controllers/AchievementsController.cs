@@ -36,6 +36,7 @@ public class AchievementsController : ControllerBase
         return Ok(badges.Select(badge =>
         {
             userBadges.TryGetValue(badge.Id, out var userBadge);
+            var isSupported = AchievementEvaluator.IsSupported(badge);
             return new
             {
                 AchievementId = badge.Id,
@@ -44,6 +45,8 @@ public class AchievementsController : ControllerBase
                 badge.Icon,
                 badge.UnlockCondition,
                 badge.Threshold,
+                IsSupported = isSupported,
+                UnsupportedReason = isSupported ? null : AchievementEvaluator.GetUnsupportedReason(badge),
                 IsUnlocked = userBadge is not null,
                 userBadge?.UnlockedAt
             };

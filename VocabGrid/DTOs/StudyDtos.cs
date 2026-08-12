@@ -15,7 +15,7 @@ public sealed class UpdateLessonProgressDto
 public sealed class SubmitReviewDto
 {
     [Required]
-    [RegularExpression("^(Again|Hard|Good|Easy)$", ErrorMessage = "Rating must be Again, Hard, Good, or Easy.")]
+    [RegularExpression("^(Again|Hard|Medium|Easy)$", ErrorMessage = "Rating must be Again, Hard, Medium, or Easy.")]
     public string Rating { get; init; } = string.Empty;
 
     [Range(0, 3600)]

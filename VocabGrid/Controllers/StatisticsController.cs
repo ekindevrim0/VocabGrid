@@ -53,7 +53,11 @@ public class StatisticsController : ControllerBase
                 .FindAsync(progress => progress.UserID == user.Id &&
                     (progress.NextReviewDate == null || progress.NextReviewDate <= DateTime.UtcNow)))
             .Count();
-        var activityDates = activities.Select(activity => activity.OccurredAt);
+        // The selected period is for the overview metrics only. Streaks must use the
+        // user's full activity history, otherwise a short date filter resets them.
+        var activityHistory = await _unitOfWork.Repository<StudyActivity>()
+            .FindAsync(activity => activity.UserId == user.Id);
+        var activityDates = activityHistory.Select(activity => activity.OccurredAt);
 
         return Ok(new
         {

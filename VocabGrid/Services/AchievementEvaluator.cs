@@ -5,6 +5,14 @@ namespace VocabGrid.Services;
 
 public static class AchievementEvaluator
 {
+    public static bool IsSupported(Badge badge)
+        => badge.UnlockCondition != "LanguagesStarted";
+
+    public static string? GetUnsupportedReason(Badge badge)
+        => badge.UnlockCondition == "LanguagesStarted"
+            ? "Language-history tracking is not yet part of the user model."
+            : null;
+
     public static async Task<IReadOnlyList<Badge>> UnlockEligibleAsync(
         IUnitOfWork unitOfWork,
         User user,
@@ -61,8 +69,7 @@ public static class AchievementEvaluator
             session.CorrectCount * 100 >= session.TotalQuestions * badge.Threshold),
         "WordsLearned" => wordProgresses.Count(progress => progress.MasteryLevel >= 4) >= badge.Threshold,
         "CardsInMinutes" => HasReviewBurst(activities, badge.Threshold),
-        // The current data model stores one target language per user, so this rule stays locked
-        // until the language-history feature is introduced by the owner of the user model.
+        // Deliberately unsupported until the user model tracks language history.
         "LanguagesStarted" => false,
         _ => false
     };
