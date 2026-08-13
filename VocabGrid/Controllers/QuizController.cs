@@ -266,6 +266,13 @@ public class QuizController : ControllerBase
             ? await AchievementEvaluator.UnlockEligibleAsync(_unitOfWork, user, activity)
             : Array.Empty<Badge>();
 
+        // So clients can highlight the right option after a wrong/skip answer
+        // without a second round-trip (options payloads never include IsCorrect).
+        var correctOptionId = (await _unitOfWork.Repository<QuizOption>()
+                .FindAsync(option => option.QuizID == quiz.QuizID && option.IsCorrect))
+            .Select(option => (int?)option.OptionID)
+            .FirstOrDefault();
+
         await _unitOfWork.CompleteAsync();
 
         return Ok(new
@@ -273,6 +280,7 @@ public class QuizController : ControllerBase
             IsCorrect = dto.Skip ? (bool?)null : isCorrect,
             dto.Skip,
             pointsEarned,
+            CorrectOptionId = correctOptionId,
             session.CorrectCount,
             session.WrongCount,
             session.SkippedCount,
