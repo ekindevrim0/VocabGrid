@@ -120,6 +120,150 @@ public class UserController : ControllerBase
         return Ok(new { Message = "Settings updated successfully.", Settings = MapSettings(settings) });
     }
 
+    [HttpGet("categories")]
+    public async Task<IActionResult> GetMyCategories()
+    {
+        var userId = TryGetUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var links = await _unitOfWork.Repository<UserCategory>()
+            .FindAsync(link => link.UserId == userId.Value);
+        var categoryIds = links.Select(link => link.CategoryId).ToHashSet();
+        var categories = categoryIds.Count == 0
+            ? new List<Category>()
+            : (await _unitOfWork.Repository<Category>()
+                    .FindAsync(category => categoryIds.Contains(category.Id)))
+                .OrderBy(category => category.Id)
+                .ToList();
+
+        return Ok(categories.Select(category => new
+        {
+            category.Id,
+            category.Name,
+            category.Description
+        }));
+    }
+
+    [HttpPut("categories")]
+    public async Task<IActionResult> ReplaceMyCategories([FromBody] ReplaceUserCategoriesDto dto)
+    {
+        var userId = TryGetUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var requestedIds = (dto.CategoryIds ?? new List<int>()).Distinct().ToList();
+        if (requestedIds.Count > 0)
+        {
+            var existingCategories = await _unitOfWork.Repository<Category>()
+                .FindAsync(category => requestedIds.Contains(category.Id));
+            if (existingCategories.Count() != requestedIds.Count)
+            {
+                return BadRequest("One or more category ids are invalid.");
+            }
+        }
+
+        var linkRepository = _unitOfWork.Repository<UserCategory>();
+        var current = await linkRepository.FindAsync(link => link.UserId == userId.Value);
+        foreach (var link in current)
+        {
+            linkRepository.Delete(link);
+        }
+
+        foreach (var categoryId in requestedIds)
+        {
+            await linkRepository.AddAsync(new UserCategory
+            {
+                UserId = userId.Value,
+                CategoryId = categoryId
+            });
+        }
+
+        await _unitOfWork.CompleteAsync();
+        return await GetMyCategories();
+    }
+
+    [HttpGet("learning-purposes")]
+    public async Task<IActionResult> GetMyLearningPurposes()
+    {
+        var userId = TryGetUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var links = await _unitOfWork.Repository<UserLearningPurpose>()
+            .FindAsync(link => link.UserId == userId.Value);
+        var purposeIds = links.Select(link => link.LearningPurposeId).ToHashSet();
+        var purposes = purposeIds.Count == 0
+            ? new List<LearningPurpose>()
+            : (await _unitOfWork.Repository<LearningPurpose>()
+                    .FindAsync(purpose => purposeIds.Contains(purpose.Id)))
+                .OrderBy(purpose => purpose.Id)
+                .ToList();
+
+        return Ok(purposes.Select(purpose => new
+        {
+            purpose.Id,
+            purpose.Name,
+            purpose.Description
+        }));
+    }
+
+    [HttpPut("learning-purposes")]
+    public async Task<IActionResult> ReplaceMyLearningPurposes([FromBody] ReplaceUserLearningPurposesDto dto)
+    {
+        var userId = TryGetUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var requestedIds = (dto.LearningPurposeIds ?? new List<int>()).Distinct().ToList();
+        if (requestedIds.Count > 0)
+        {
+            var existingPurposes = await _unitOfWork.Repository<LearningPurpose>()
+                .FindAsync(purpose => requestedIds.Contains(purpose.Id));
+            if (existingPurposes.Count() != requestedIds.Count)
+            {
+                return BadRequest("One or more learning purpose ids are invalid.");
+            }
+        }
+
+        var linkRepository = _unitOfWork.Repository<UserLearningPurpose>();
+        var current = await linkRepository.FindAsync(link => link.UserId == userId.Value);
+        foreach (var link in current)
+        {
+            linkRepository.Delete(link);
+        }
+
+        foreach (var purposeId in requestedIds)
+        {
+            await linkRepository.AddAsync(new UserLearningPurpose
+            {
+                UserId = userId.Value,
+                LearningPurposeId = purposeId
+            });
+        }
+
+        await _unitOfWork.CompleteAsync();
+        return await GetMyLearningPurposes();
+    }
+
     private async Task<UserSettings> GetOrCreateSettingsAsync(int userId)
     {
         var settingsRepository = _unitOfWork.Repository<UserSettings>();
