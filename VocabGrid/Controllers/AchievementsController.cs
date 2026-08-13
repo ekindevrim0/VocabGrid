@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using VocabGrid.DTOs;
 using VocabGrid.Entities;
 using VocabGrid.Interfaces;
 using VocabGrid.Services;
@@ -20,7 +21,8 @@ public class AchievementsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAchievements()
+    [ProducesResponseType(typeof(IEnumerable<AchievementDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<AchievementDto>>> GetAchievements()
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -37,24 +39,25 @@ public class AchievementsController : ControllerBase
         {
             userBadges.TryGetValue(badge.Id, out var userBadge);
             var isSupported = AchievementEvaluator.IsSupported(badge);
-            return new
+            return new AchievementDto
             {
                 AchievementId = badge.Id,
-                badge.Name,
-                badge.Description,
-                badge.Icon,
-                badge.UnlockCondition,
-                badge.Threshold,
+                Name = badge.Name,
+                Description = badge.Description,
+                Icon = badge.Icon,
+                UnlockCondition = badge.UnlockCondition,
+                Threshold = badge.Threshold,
                 IsSupported = isSupported,
                 UnsupportedReason = isSupported ? null : AchievementEvaluator.GetUnsupportedReason(badge),
                 IsUnlocked = userBadge is not null,
-                userBadge?.UnlockedAt
+                UnlockedAt = userBadge?.UnlockedAt
             };
         }));
     }
 
     [HttpPost("evaluate")]
-    public async Task<IActionResult> EvaluateAchievements()
+    [ProducesResponseType(typeof(EvaluateAchievementsResponseDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<EvaluateAchievementsResponseDto>> EvaluateAchievements()
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -74,15 +77,15 @@ public class AchievementsController : ControllerBase
             await _unitOfWork.CompleteAsync();
         }
 
-        return Ok(new
+        return Ok(new EvaluateAchievementsResponseDto
         {
-            NewlyUnlocked = newlyUnlocked.Select(badge => new
+            NewlyUnlocked = newlyUnlocked.Select(badge => new NewlyUnlockedAchievementDto
             {
                 AchievementId = badge.Id,
-                badge.Name,
-                badge.Description,
-                badge.Icon
-            })
+                Name = badge.Name,
+                Description = badge.Description,
+                Icon = badge.Icon
+            }).ToList()
         });
     }
 

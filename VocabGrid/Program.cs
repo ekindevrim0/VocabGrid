@@ -51,9 +51,27 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    // Development: open for local Flutter/web testing.
+    // Production: set Cors:AllowedOrigins in config (comma-separated).
+    options.AddPolicy("AppCors", policy =>
     {
-        policy.AllowAnyOrigin()
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+            return;
+        }
+
+        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                      ?? Array.Empty<string>();
+        if (origins.Length == 0)
+        {
+            policy.SetIsOriginAllowed(_ => false);
+            return;
+        }
+
+        policy.WithOrigins(origins)
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
@@ -98,7 +116,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("AllowAll");
+app.UseCors("AppCors");
 
 var webRoot = Path.Combine(app.Environment.ContentRootPath, "wwwroot");
 Directory.CreateDirectory(Path.Combine(webRoot, "uploads"));

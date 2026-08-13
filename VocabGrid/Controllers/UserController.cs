@@ -26,7 +26,8 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("profile")]
-    public async Task<IActionResult> GetProfile()
+    [ProducesResponseType(typeof(UserProfileDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<UserProfileDto>> GetProfile()
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -69,6 +70,12 @@ public class UserController : ControllerBase
         user.AvatarUrl = string.IsNullOrWhiteSpace(dto.AvatarUrl) ? user.AvatarUrl : dto.AvatarUrl.Trim();
         user.NativeLanguage = string.IsNullOrWhiteSpace(dto.NativeLanguage) ? user.NativeLanguage : dto.NativeLanguage.Trim();
         user.TargetLanguage = string.IsNullOrWhiteSpace(dto.TargetLanguage) ? user.TargetLanguage : dto.TargetLanguage.Trim();
+        user.NativeLanguageCode = string.IsNullOrWhiteSpace(dto.NativeLanguageCode)
+            ? user.NativeLanguageCode
+            : dto.NativeLanguageCode.Trim().ToLowerInvariant();
+        user.TargetLanguageCode = string.IsNullOrWhiteSpace(dto.TargetLanguageCode)
+            ? user.TargetLanguageCode
+            : dto.TargetLanguageCode.Trim().ToLowerInvariant();
         user.TargetProficiencyLevel = string.IsNullOrWhiteSpace(dto.TargetProficiencyLevel)
             ? user.TargetProficiencyLevel
             : dto.TargetProficiencyLevel.Trim();
@@ -121,7 +128,8 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("categories")]
-    public async Task<IActionResult> GetMyCategories()
+    [ProducesResponseType(typeof(IEnumerable<CategoryDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<CategoryDto>>> GetMyCategories()
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -139,16 +147,12 @@ public class UserController : ControllerBase
                 .OrderBy(category => category.Id)
                 .ToList();
 
-        return Ok(categories.Select(category => new
-        {
-            category.Id,
-            category.Name,
-            category.Description
-        }));
+        return Ok(categories.Select(MapCategoryDto));
     }
 
     [HttpPut("categories")]
-    public async Task<IActionResult> ReplaceMyCategories([FromBody] ReplaceUserCategoriesDto dto)
+    [ProducesResponseType(typeof(IEnumerable<CategoryDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<CategoryDto>>> ReplaceMyCategories([FromBody] ReplaceUserCategoriesDto dto)
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -193,7 +197,8 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("learning-purposes")]
-    public async Task<IActionResult> GetMyLearningPurposes()
+    [ProducesResponseType(typeof(IEnumerable<LearningPurposeDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<LearningPurposeDto>>> GetMyLearningPurposes()
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -211,16 +216,12 @@ public class UserController : ControllerBase
                 .OrderBy(purpose => purpose.Id)
                 .ToList();
 
-        return Ok(purposes.Select(purpose => new
-        {
-            purpose.Id,
-            purpose.Name,
-            purpose.Description
-        }));
+        return Ok(purposes.Select(MapLearningPurposeDto));
     }
 
     [HttpPut("learning-purposes")]
-    public async Task<IActionResult> ReplaceMyLearningPurposes([FromBody] ReplaceUserLearningPurposesDto dto)
+    [ProducesResponseType(typeof(IEnumerable<LearningPurposeDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<LearningPurposeDto>>> ReplaceMyLearningPurposes([FromBody] ReplaceUserLearningPurposesDto dto)
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -287,6 +288,8 @@ public class UserController : ControllerBase
         AvatarUrl = user.AvatarUrl,
         NativeLanguage = user.NativeLanguage,
         TargetLanguage = user.TargetLanguage,
+        NativeLanguageCode = user.NativeLanguageCode,
+        TargetLanguageCode = user.TargetLanguageCode,
         TargetProficiencyLevel = user.TargetProficiencyLevel,
         DailyGoalMinutes = user.DailyGoalMinutes,
         CurrentStreak = user.CurrentStreak,
@@ -294,6 +297,22 @@ public class UserController : ControllerBase
         Level = user.Level,
         TotalXp = user.TotalXp,
         IsPremium = user.IsPremium
+    };
+
+    private static CategoryDto MapCategoryDto(Category category) => new()
+    {
+        Id = category.Id,
+        Name = category.Name,
+        Description = category.Description,
+        IconName = category.IconName,
+        ColorHex = category.ColorHex
+    };
+
+    private static LearningPurposeDto MapLearningPurposeDto(LearningPurpose purpose) => new()
+    {
+        Id = purpose.Id,
+        Name = purpose.Name,
+        Description = purpose.Description
     };
 
     private static UserSettingsDto MapSettings(UserSettings settings) => new()

@@ -255,23 +255,23 @@ namespace VocabGrid.Data
                 .HasIndex(t => t.Token)
                 .IsUnique();
 
-            // Figma Profile categories (Science dahil)
+            // Figma Profile categories (Science dahil) — IconName/ColorHex Flutter mock ile hizalı
             modelBuilder.Entity<Category>().HasData(
-                new Category { Id = 1, Name = "Food", Description = "Food & Dining Vocabulary" },
-                new Category { Id = 2, Name = "Travel", Description = "Travel & Tourism Vocabulary" },
-                new Category { Id = 3, Name = "Business", Description = "Professional & Work Vocabulary" },
-                new Category { Id = 4, Name = "Technology", Description = "Tech & IT Vocabulary" },
-                new Category { Id = 5, Name = "Education", Description = "Academic & School Vocabulary" },
-                new Category { Id = 6, Name = "Movies", Description = "Cinema & Entertainment" },
-                new Category { Id = 7, Name = "Music", Description = "Music & Songs" },
-                new Category { Id = 8, Name = "Gaming", Description = "Video Games & Gaming Culture" },
-                new Category { Id = 9, Name = "Sports", Description = "Sports & Fitness" },
-                new Category { Id = 10, Name = "Health", Description = "Health & Medicine" },
-                new Category { Id = 11, Name = "Shopping", Description = "Shopping & Fashion" },
-                new Category { Id = 12, Name = "Family", Description = "Family & Relationships" },
-                new Category { Id = 13, Name = "Nature", Description = "Nature & Environment" },
-                new Category { Id = 14, Name = "Science", Description = "Science & Research" },
-                new Category { Id = 15, Name = "Animals", Description = "Animals & Wildlife" }
+                new Category { Id = 1, Name = "Food", Description = "Food & Dining Vocabulary", IconName = "restaurant", ColorHex = "#F97316" },
+                new Category { Id = 2, Name = "Travel", Description = "Travel & Tourism Vocabulary", IconName = "flight", ColorHex = "#3B82F6" },
+                new Category { Id = 3, Name = "Business", Description = "Professional & Work Vocabulary", IconName = "work", ColorHex = "#6366F1" },
+                new Category { Id = 4, Name = "Technology", Description = "Tech & IT Vocabulary", IconName = "laptop_mac", ColorHex = "#06B6D4" },
+                new Category { Id = 5, Name = "Education", Description = "Academic & School Vocabulary", IconName = "school", ColorHex = "#8B5CF6" },
+                new Category { Id = 6, Name = "Movies", Description = "Cinema & Entertainment", IconName = "local_movies", ColorHex = "#EC4899" },
+                new Category { Id = 7, Name = "Music", Description = "Music & Songs", IconName = "music_note", ColorHex = "#F43F5E" },
+                new Category { Id = 8, Name = "Gaming", Description = "Video Games & Gaming Culture", IconName = "sports_esports", ColorHex = "#10B981" },
+                new Category { Id = 9, Name = "Sports", Description = "Sports & Fitness", IconName = "sports_soccer", ColorHex = "#22C55E" },
+                new Category { Id = 10, Name = "Health", Description = "Health & Medicine", IconName = "favorite", ColorHex = "#EF4444" },
+                new Category { Id = 11, Name = "Shopping", Description = "Shopping & Fashion", IconName = "shopping_bag", ColorHex = "#F59E0B" },
+                new Category { Id = 12, Name = "Family", Description = "Family & Relationships", IconName = "family_restroom", ColorHex = "#14B8A6" },
+                new Category { Id = 13, Name = "Nature", Description = "Nature & Environment", IconName = "park", ColorHex = "#84CC16" },
+                new Category { Id = 14, Name = "Science", Description = "Science & Research", IconName = "science", ColorHex = "#0EA5E9" },
+                new Category { Id = 15, Name = "Animals", Description = "Animals & Wildlife", IconName = "pets", ColorHex = "#A855F7" }
             );
 
             // Figma: Learning Purpose · 2 selected (çoklu seçim)

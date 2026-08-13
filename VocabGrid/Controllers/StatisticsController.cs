@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using VocabGrid.DTOs;
 using VocabGrid.Entities;
 using VocabGrid.Interfaces;
 using VocabGrid.Services;
@@ -20,7 +21,8 @@ public class StatisticsController : ControllerBase
     }
 
     [HttpGet("overview")]
-    public async Task<IActionResult> GetOverview([FromQuery] DateTime? from, [FromQuery] DateTime? to)
+    [ProducesResponseType(typeof(StatisticsOverviewDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<StatisticsOverviewDto>> GetOverview([FromQuery] DateTime? from, [FromQuery] DateTime? to)
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -59,9 +61,13 @@ public class StatisticsController : ControllerBase
             .FindAsync(activity => activity.UserId == user.Id);
         var activityDates = activityHistory.Select(activity => activity.OccurredAt);
 
-        return Ok(new
+        return Ok(new StatisticsOverviewDto
         {
-            Period = new { period.Value.Start, To = period.Value.EndExclusive.AddTicks(-1) },
+            Period = new StatisticsPeriodDto
+            {
+                Start = period.Value.Start,
+                To = period.Value.EndExclusive.AddTicks(-1)
+            },
             TotalStudySeconds = activities.Sum(activity => activity.DurationSeconds),
             TotalStudyMinutes = Math.Round(activities.Sum(activity => activity.DurationSeconds) / 60.0, 1),
             QuizAccuracyPercent = quizAnswers.Count == 0
@@ -74,13 +80,14 @@ public class StatisticsController : ControllerBase
             DueReviews = dueReviews,
             CurrentStreak = StudyEngine.CalculateCurrentStreak(activityDates, DateTime.UtcNow),
             LongestStreak = Math.Max(user.LongestStreak, StudyEngine.CalculateLongestStreak(activityDates)),
-            user.TotalXp,
-            user.Level
+            TotalXp = user.TotalXp,
+            Level = user.Level
         });
     }
 
     [HttpGet("heatmap")]
-    public async Task<IActionResult> GetHeatmap([FromQuery] DateTime? from, [FromQuery] DateTime? to)
+    [ProducesResponseType(typeof(IEnumerable<HeatmapPointDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<HeatmapPointDto>>> GetHeatmap([FromQuery] DateTime? from, [FromQuery] DateTime? to)
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -107,11 +114,11 @@ public class StatisticsController : ControllerBase
                     XpEarned = group.Sum(activity => activity.XpEarned)
                 });
 
-        var days = new List<object>();
+        var days = new List<HeatmapPointDto>();
         for (var date = period.Value.Start.Date; date < period.Value.EndExclusive.Date; date = date.AddDays(1))
         {
             byDate.TryGetValue(date, out var summary);
-            days.Add(new
+            days.Add(new HeatmapPointDto
             {
                 Date = date,
                 StudySeconds = summary?.StudySeconds ?? 0,

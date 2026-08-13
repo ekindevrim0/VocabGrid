@@ -18,6 +18,14 @@ public class User
     public string NativeLanguage { get; set; } = "English";
     public string TargetLanguage { get; set; } = "Turkish";
 
+    /// <summary>ISO 639-1 language code for TTS / client matching (e.g. en, tr).</summary>
+    [MaxLength(8)]
+    public string NativeLanguageCode { get; set; } = "en";
+
+    /// <summary>ISO 639-1 language code for TTS / client matching (e.g. en, tr).</summary>
+    [MaxLength(8)]
+    public string TargetLanguageCode { get; set; } = "tr";
+
     /// <summary>Figma: Intermediate / Beginner / Advanced vb.</summary>
     public string TargetProficiencyLevel { get; set; } = "Beginner";
 

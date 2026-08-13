@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using VocabGrid.DTOs;
 using VocabGrid.Entities;
 using VocabGrid.Interfaces;
 
@@ -18,15 +19,16 @@ public class LearningPurposesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    [ProducesResponseType(typeof(IEnumerable<LearningPurposeDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<LearningPurposeDto>>> GetAll()
     {
         var purposes = (await _unitOfWork.Repository<LearningPurpose>().GetAllAsync())
             .OrderBy(purpose => purpose.Id)
-            .Select(purpose => new
+            .Select(purpose => new LearningPurposeDto
             {
-                purpose.Id,
-                purpose.Name,
-                purpose.Description
+                Id = purpose.Id,
+                Name = purpose.Name,
+                Description = purpose.Description
             });
 
         return Ok(purposes);

@@ -8,6 +8,8 @@ public class UserProfileDto
     public string? AvatarUrl { get; set; }
     public string NativeLanguage { get; set; } = string.Empty;
     public string TargetLanguage { get; set; } = string.Empty;
+    public string NativeLanguageCode { get; set; } = string.Empty;
+    public string TargetLanguageCode { get; set; } = string.Empty;
     public string TargetProficiencyLevel { get; set; } = string.Empty;
     public int DailyGoalMinutes { get; set; }
     public int CurrentStreak { get; set; }
@@ -24,6 +26,8 @@ public class UpdateUserProfileDto
     public string? AvatarUrl { get; set; }
     public string? NativeLanguage { get; set; }
     public string? TargetLanguage { get; set; }
+    public string? NativeLanguageCode { get; set; }
+    public string? TargetLanguageCode { get; set; }
     public string? TargetProficiencyLevel { get; set; }
     public int DailyGoalMinutes { get; set; }
 }

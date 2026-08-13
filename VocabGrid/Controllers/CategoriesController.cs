@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using VocabGrid.DTOs;
 using VocabGrid.Entities;
 using VocabGrid.Interfaces;
 
@@ -19,7 +20,8 @@ public class CategoriesController : ControllerBase
     /// List categories. Optional search: ?q=food
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetCategories([FromQuery] string? q = null)
+    [ProducesResponseType(typeof(IEnumerable<CategoryDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<CategoryDto>>> GetCategories([FromQuery] string? q = null)
     {
         var categories = await _unitOfWork.Repository<Category>().GetAllAsync();
         var query = categories.AsEnumerable();
@@ -34,11 +36,13 @@ public class CategoriesController : ControllerBase
 
         return Ok(query
             .OrderBy(category => category.Id)
-            .Select(category => new
+            .Select(category => new CategoryDto
             {
-                category.Id,
-                category.Name,
-                category.Description
+                Id = category.Id,
+                Name = category.Name,
+                Description = category.Description,
+                IconName = category.IconName,
+                ColorHex = category.ColorHex
             }));
     }
 }

@@ -20,7 +20,8 @@ public class DeckController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetMyDecks()
+    [ProducesResponseType(typeof(IEnumerable<DeckSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<DeckSummaryDto>>> GetMyDecks()
     {
         var userId = TryGetUserId();
         if (userId is null)
@@ -49,18 +50,18 @@ public class DeckController : ControllerBase
         {
             var deckCards = cards.Where(card => card.DeckId == deck.Id).ToList();
             var stats = ComputeDeckStats(deckCards, progress, now);
-            return new
+            return new DeckSummaryDto
             {
-                deck.Id,
-                deck.Title,
-                deck.Description,
-                deck.CoverImageUrl,
-                deck.CreatedAt,
-                deck.UpdatedAt,
-                stats.CardCount,
-                stats.DueCount,
-                stats.MasteryPercentage,
-                stats.ReviewsCount
+                Id = deck.Id,
+                Title = deck.Title,
+                Description = deck.Description,
+                CoverImageUrl = deck.CoverImageUrl,
+                CreatedAt = deck.CreatedAt,
+                UpdatedAt = deck.UpdatedAt,
+                CardCount = stats.CardCount,
+                DueCount = stats.DueCount,
+                MasteryPercentage = stats.MasteryPercentage,
+                ReviewsCount = stats.ReviewsCount
             };
         }));
     }
