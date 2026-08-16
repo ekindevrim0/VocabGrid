@@ -26,8 +26,8 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
 
 ## Getting Started Locally
 
-Follow the steps in order. Steps 1–4 are required; step 5 (SMTP) is optional — the API
-runs fine without it.
+Only steps 1–3 need anything from you. Step 4 (the database) happens by itself, and
+step 5 (SMTP) is optional — the API runs fine without it.
 
 ### Prerequisites
 
@@ -35,12 +35,11 @@ runs fine without it.
   `<RollForward>LatestMajor</RollForward>`, so a machine that only has the .NET 9 or 10
   runtime installed can still run it.
 * **SQL Server** — LocalDB (ships with Visual Studio), SQL Server Express, or a full instance.
-* **EF Core CLI tools**, for creating the database:
-  ```bash
-  dotnet tool install --global dotnet-ef
-  ```
-  Already installed? `dotnet ef --version` prints the version.
+  You do not need to create a database by hand; the app does that on first run.
 * Visual Studio 2022, VS Code, Rider, or Cursor.
+
+The EF Core CLI (`dotnet tool install --global dotnet-ef`) is **optional** — useful for
+adding migrations, not needed to run the project.
 
 ### 1. Clone and enter the project folder
 
@@ -110,24 +109,36 @@ dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=.\SQLEXPRE
 `TrustServerCertificate=True` is needed for local instances using a self-signed
 certificate. Do not carry it into production.
 
-### 4. Create the database
+### 4. The database — nothing to do
+
+**Skip this step.** In Development the app creates the database itself on first run and
+applies any migration added since the last one. There is no script to execute, no backup
+to restore, and nothing to attach in SSMS.
+
+You will see it happen in the startup log:
+
+```
+info: VocabGrid[0] Applying 7 pending migration(s) to VocabGridDb.
+info: Microsoft.EntityFrameworkCore.Migrations[20402] Applying migration '20260808183423_InitialCreate'.
+...
+info: VocabGrid[0] Database ready: VocabGridDb.
+```
+
+On later runs, with nothing pending, only the last line appears.
+
+What you get is a fully populated database — 22 tables plus the seed content: 15
+categories, 6 learning purposes, 5 achievements, 10 lessons, 10 quizzes, and 118
+vocabulary entries. No user accounts; you create yours by registering in the app.
+
+This is Development-only on purpose. In production a schema change should be a deliberate,
+reviewed step, and two instances starting at once would race each other applying it —
+so deploy with an explicit `dotnet ef database update` instead.
+
+Want to apply migrations by hand anyway (needs the optional EF CLI):
 
 ```bash
 dotnet ef database update
 ```
-
-This creates `VocabGridDb` and applies all seven migrations, including the seed data:
-languages, categories, learning purposes, achievements, 10 lessons, and 118 vocabulary
-entries. No manual SQL script is needed — a fresh clone gets a fully populated database
-from this one command.
-
-To confirm afterwards:
-
-```bash
-dotnet ef migrations list
-```
-
-Every migration should be listed without a `(Pending)` marker.
 
 ### 5. Email delivery (optional)
 
