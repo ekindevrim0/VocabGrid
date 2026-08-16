@@ -2,9 +2,10 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <!-- Only the .NET 10 runtime is installed on this machine; without this the
-         net8.0 app refuses to start ("You must install or update .NET"). Rolling
-         forward keeps the project on net8.0 while letting it run on 10. -->
+    <!-- A net8.0 app refuses to start ("You must install or update .NET") on a
+         machine that only has a newer runtime. Rolling forward keeps the project
+         on net8.0 while letting it run on whatever major version is installed,
+         so contributors do not all have to pin the same runtime. -->
     <RollForward>LatestMajor</RollForward>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
