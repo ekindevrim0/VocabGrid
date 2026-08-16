@@ -1,0 +1,22 @@
+@VocabGrid_HostAddress = http://localhost:5068
+
+GET {{VocabGrid_HostAddress}}/api/Categories
+Accept: application/json
+
+###
+
+GET {{VocabGrid_HostAddress}}/api/Achievements
+Accept: application/json
+Authorization: Bearer {{token}}
+
+###
+
+POST {{VocabGrid_HostAddress}}/api/Auth/login
+Content-Type: application/json
+
+{
+  "email": "sarah@example.com",
+  "password": "Password123"
+}
+
+###
