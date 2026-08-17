@@ -81,6 +81,14 @@ public class DeckSummaryDto
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string? CoverImageUrl { get; set; }
+
+    /// <summary>
+    /// Uygulamanın oluşturduğu başlangıç destelerinde dolu ("basics_DE"),
+    /// kullanıcının kendi destelerinde null. İstemci hedef dil değiştiğinde
+    /// hangi desteleri yenileyeceğini buradan anlar.
+    /// </summary>
+    public string? StarterKey { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public int CardCount { get; set; }

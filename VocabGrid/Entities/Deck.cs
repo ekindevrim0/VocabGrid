@@ -20,6 +20,23 @@ public class Deck
     /// <summary>Opsiyonel kapak görseli.</summary>
     public string? CoverImageUrl { get; set; }
 
+    /// <summary>
+    /// Uygulamanın hesap açılışında oluşturduğu başlangıç destelerini işaretler:
+    /// "basics_DE", "food_TR" gibi, konu kısaltması ve hedef dilin kodu.
+    /// Kullanıcının kendi oluşturduğu destelerde null.
+    ///
+    /// Buna ihtiyaç var çünkü hedef dil değiştiğinde başlangıç destelerinin de
+    /// yeni dille değişmesi gerekiyor ve hangi destenin uygulamadan geldiğini
+    /// başlıktan anlamak güvenilmez: "Numbers" ve "Food &amp; Drink" dil adı
+    /// taşımıyor, üstelik kullanıcı desteyi yeniden adlandırabiliyor.
+    ///
+    /// İstemci bu alanı yazar; sunucu yalnızca saklar ve geri verir. Anahtarın
+    /// biçimini sunucu doğrulamaz — hangi konuların gönderileceği uygulamanın
+    /// içeriğine bağlı ve burada tekrar edilmesi ikisini birbirine bağlardı.
+    /// </summary>
+    [MaxLength(40)]
+    public string? StarterKey { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 

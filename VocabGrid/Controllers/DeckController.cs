@@ -56,6 +56,7 @@ public class DeckController : ControllerBase
                 Title = deck.Title,
                 Description = deck.Description,
                 CoverImageUrl = deck.CoverImageUrl,
+                StarterKey = deck.StarterKey,
                 CreatedAt = deck.CreatedAt,
                 UpdatedAt = deck.UpdatedAt,
                 CardCount = stats.CardCount,
@@ -100,6 +101,7 @@ public class DeckController : ControllerBase
             deck.Title,
             deck.Description,
             deck.CoverImageUrl,
+            deck.StarterKey,
             deck.CreatedAt,
             deck.UpdatedAt,
             stats.CardCount,
@@ -130,6 +132,7 @@ public class DeckController : ControllerBase
             Title = dto.Title.Trim(),
             Description = dto.Description?.Trim() ?? string.Empty,
             CoverImageUrl = string.IsNullOrWhiteSpace(dto.CoverImageUrl) ? null : dto.CoverImageUrl.Trim(),
+            StarterKey = string.IsNullOrWhiteSpace(dto.StarterKey) ? null : dto.StarterKey.Trim(),
             CreatedAt = DateTime.UtcNow
         };
 
@@ -142,6 +145,7 @@ public class DeckController : ControllerBase
             deck.Title,
             deck.Description,
             deck.CoverImageUrl,
+            deck.StarterKey,
             deck.CreatedAt,
             deck.UpdatedAt,
             CardCount = 0,
@@ -185,9 +189,10 @@ public class DeckController : ControllerBase
             deck.Title,
             deck.Description,
             deck.CoverImageUrl,
+            deck.StarterKey,
             deck.CreatedAt,
             deck.UpdatedAt
-        });
+});
     }
 
     [HttpDelete("{id:int}")]
