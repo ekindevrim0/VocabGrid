@@ -11,6 +11,7 @@ public class CreateDeckDto
     [MaxLength(500)]
     public string Description { get; set; } = string.Empty;
 
+    [MaxLength(500)]
     public string? CoverImageUrl { get; set; }
 }
 
@@ -23,5 +24,6 @@ public class UpdateDeckDto
     [MaxLength(500)]
     public string Description { get; set; } = string.Empty;
 
+    [MaxLength(500)]
     public string? CoverImageUrl { get; set; }
 }

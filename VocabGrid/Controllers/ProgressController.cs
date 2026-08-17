@@ -113,6 +113,7 @@ public class ProgressController : ControllerBase
             XpEarned = dto.Completed ? 5 : 0
         };
         await _unitOfWork.Repository<StudyActivity>().AddAsync(activity);
+        await DailySummaryEngine.RecordAsync(_unitOfWork, activity);
 
         StudyEngine.ApplyXp(user, activity.XpEarned);
         await StudyEngine.UpdateStreakAsync(_unitOfWork, user, occurredAt);
@@ -295,6 +296,7 @@ public class ProgressController : ControllerBase
             XpEarned = xpEarned
         };
         await _unitOfWork.Repository<StudyActivity>().AddAsync(activity);
+        await DailySummaryEngine.RecordAsync(_unitOfWork, activity);
 
         StudyEngine.ApplyXp(user, xpEarned);
         await StudyEngine.UpdateStreakAsync(_unitOfWork, user, reviewedAt);
@@ -338,6 +340,69 @@ public class ProgressController : ControllerBase
             CurrentStreak = StudyEngine.CalculateCurrentStreak(activityDates, DateTime.UtcNow),
             LongestStreak = Math.Max(user.LongestStreak, StudyEngine.CalculateLongestStreak(activityDates)),
             user.DailyGoalMinutes
+        });
+    }
+
+    /// <summary>
+    /// İstatistik ekranının ısı haritası için gün gün özet.
+    ///
+    /// Ham aktiviteleri tarayıp gruplamak yerine <see cref="DailyStudySummary"/>
+    /// satırlarını okur — aynı sayılar, ama bir yıllık aralıkta on binlerce
+    /// satır yerine en fazla 365 satır.
+    ///
+    /// Çalışılmayan günler için satır yoktur ve uydurulmaz; boşluğu istemci
+    /// "o gün aktivite yok" olarak çizer.
+    /// </summary>
+    [HttpGet("daily-summary")]
+    public async Task<IActionResult> GetDailySummary(
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null)
+    {
+        var userId = TryGetUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // Varsayılan bir yıl: ısı haritasının gösterdiği aralık.
+        var start = from ?? today.AddYears(-1);
+        var end = to ?? today;
+
+        if (start > end)
+        {
+            return BadRequest(new { Message = "'from' tarihi 'to' tarihinden sonra olamaz." });
+        }
+
+        var summaries = await _unitOfWork.Repository<DailyStudySummary>()
+            .FindAsync(summary =>
+                summary.UserId == userId.Value &&
+                summary.Day >= start &&
+                summary.Day <= end);
+
+        var days = summaries.OrderBy(summary => summary.Day).ToList();
+
+        return Ok(new
+        {
+            From = start,
+            To = end,
+            TotalReviews = days.Sum(day => day.ReviewCount),
+            TotalCorrect = days.Sum(day => day.CorrectCount),
+            TotalQuizzes = days.Sum(day => day.QuizCount),
+            TotalLessons = days.Sum(day => day.LessonCount),
+            TotalStudySeconds = days.Sum(day => day.StudySeconds),
+            TotalXp = days.Sum(day => day.XpEarned),
+            ActiveDays = days.Count,
+            Days = days.Select(day => new
+            {
+                day.Day,
+                day.ReviewCount,
+                day.CorrectCount,
+                day.QuizCount,
+                day.LessonCount,
+                day.StudySeconds,
+                day.XpEarned
+            })
         });
     }
 

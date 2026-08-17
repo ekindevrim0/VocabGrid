@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace VocabGrid.DTOs;
 
 public class UserProfileDto
@@ -28,7 +30,22 @@ public class UpdateUserProfileDto
     public string? TargetLanguage { get; set; }
     public string? NativeLanguageCode { get; set; }
     public string? TargetLanguageCode { get; set; }
+    // Onboarding sihirbazının gönderdiği dört değer. Aynı küme veritabanında da
+    // CHECK olarak duruyor; burası istemciye anlaşılır bir hata döndürmek için.
+    //
+    // Boş string bilerek kabul ediliyor: bu kısmi bir güncelleme DTO'su ve
+    // denetleyici boş/null gelen alanı "değiştirme" olarak yorumluyor
+    // (UserController.UpdateProfile). Boşu reddetseydik, yalnızca ana dilini
+    // değiştiren bir istek de reddedilirdi.
+    [RegularExpression(
+        "^$|^(Just Starting|Beginner|Intermediate|Advanced)$",
+        ErrorMessage = "TargetProficiencyLevel must be Just Starting, Beginner, Intermediate, or Advanced.")]
     public string? TargetProficiencyLevel { get; set; }
+
+    // Alt sınır 0, 1 değil — aynı nedenle: denetleyici 0'ı "bu alana dokunma"
+    // olarak okuyor. Üst sınır ise gerçek bir doğrulama; onsuz 700 gibi bir
+    // değer sütundaki CHECK'e çarpıp anlaşılmaz bir 500 üretirdi.
+    [Range(0, 600)]
     public int DailyGoalMinutes { get; set; }
 }
 

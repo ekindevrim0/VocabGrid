@@ -32,4 +32,5 @@ public class Vocabulary
 
     public ICollection<LessonVocabulary> LessonVocabularies { get; set; } = new List<LessonVocabulary>();
     public ICollection<UserWordProgress> UserWordProgresses { get; set; } = new List<UserWordProgress>();
+    public ICollection<VocabularyTag> VocabularyTags { get; set; } = new List<VocabularyTag>();
 }

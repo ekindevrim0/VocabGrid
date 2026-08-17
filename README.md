@@ -19,7 +19,9 @@ An ASP.NET Core Web API backend for a language learning and memorization app uti
 * **Email Verification:** 6-digit codes with a 15-minute lifetime and a 5-attempt budget.
 * **Password Reset:** Emailed reset tokens with anti-enumeration responses.
 * **Flashcard & Deck Management:** Create, update, and manage vocabulary flashcards for target languages.
-* **Curriculum Content:** 10 lessons and 118 vocabulary entries ship as seed data.
+* **Curriculum Content:** 20 lessons from A1 to B2 and 238 vocabulary entries ship as seed data.
+* **Data Integrity:** every text column is length-bounded and 23 CHECK constraints enforce
+  the same rules the DTOs do, so invalid data cannot reach the tables by any path.
 * **Database Persistence:** SQL Server backend managed via Entity Framework migrations.
 
 ---
@@ -118,7 +120,7 @@ to restore, and nothing to attach in SSMS.
 You will see it happen in the startup log:
 
 ```
-info: VocabGrid[0] Applying 7 pending migration(s) to VocabGridDb.
+info: VocabGrid[0] Applying 10 pending migration(s) to VocabGridDb.
 info: Microsoft.EntityFrameworkCore.Migrations[20402] Applying migration '20260808183423_InitialCreate'.
 ...
 info: VocabGrid[0] Database ready: VocabGridDb.
@@ -126,9 +128,10 @@ info: VocabGrid[0] Database ready: VocabGridDb.
 
 On later runs, with nothing pending, only the last line appears.
 
-What you get is a fully populated database — 22 tables plus the seed content: 15
-categories, 6 learning purposes, 5 achievements, 10 lessons, 10 quizzes, and 118
-vocabulary entries. No user accounts; you create yours by registering in the app.
+What you get is a fully populated database — 26 tables plus the seed content: 10
+languages, 15 categories, 14 word tags, 6 learning purposes, 5 achievements, 20 lessons,
+10 quizzes, 238 vocabulary entries and 312 word-to-tag links. No user accounts; you create
+yours by registering in the app.
 
 This is Development-only on purpose. In production a schema change should be a deliberate,
 reviewed step, and two instances starting at once would race each other applying it —
@@ -238,6 +241,26 @@ the auth response carries `isEmailVerified` so the client can decide what to do 
 
 ---
 
+## Catalog and statistics endpoints
+
+`GET /api/Language` — the supported languages, ordered for a picker. **Anonymous**: the
+sign-up and onboarding screens need this list before the user has a session. Add
+`?includeInactive=true` to see languages that have been switched off.
+
+`GET /api/Tag` — word tags, optionally filtered with `?kind=Grammar|Register|Difficulty`.
+Tags describe a word's grammar or usage ("irregular verb", "formal", "false friend") and
+are separate from categories, which are topics the learner picks as interests.
+
+`GET /api/Tag/{slug}/words` — words carrying a tag. Returns curriculum words plus the
+caller's own cards; another user's cards never appear, even when they share the tag.
+
+`GET /api/Progress/daily-summary?from=&to=` — one row per day of study, defaulting to the
+last year. Backed by a rollup table rather than a scan over raw activity, so the heatmap
+reads at most 365 rows instead of every review the user has ever done. Days with no study
+have no row — the client draws the gap as "no activity" rather than a zero.
+
+---
+
 ## Flutter / client notes
 
 * Android emulator base URL: `http://10.0.2.2:5068` (`localhost` inside the emulator is the emulator itself)
@@ -248,6 +271,10 @@ the auth response carries `isEmailVerified` so the client can decide what to do 
 * Learning purposes: `PUT /api/User/learning-purposes` expects `{ "learningPurposeIds": [...] }`.
   A different key name binds to nothing and silently clears the user's saved purposes.
 * Categories include `iconName` and `colorHex`
+* Language list: `GET /api/Language` — prefer this over a hardcoded client list. `flagCode`
+  is separate from `code` because they differ (`en`→`gb`, `ja`→`jp`, `ko`→`kr`, `zh`→`cn`)
+* Seed word IDs live in reserved ranges (1001–1118 and 5001–5120); cards created through
+  the API start at 10001, so the two never collide
 * Development CORS is open; production must set `Cors:AllowedOrigins`
 
 ---

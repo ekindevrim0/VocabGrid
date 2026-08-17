@@ -28,10 +28,22 @@ namespace VocabGrid.Data
         public DbSet<StudyActivity> StudyActivities { get; set; }
         public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
         public DbSet<EmailVerificationToken> EmailVerificationTokens { get; set; }
+        public DbSet<Language> Languages { get; set; }
+        public DbSet<Tag> Tags { get; set; }
+        public DbSet<VocabularyTag> VocabularyTags { get; set; }
+        public DbSet<DailyStudySummary> DailyStudySummaries { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Sütun uzunlukları, arama indeksleri ve CHECK kısıtları — kendi
+            // dosyasında, çünkü burası zaten uzun ve ikisi farklı türde bilgi:
+            // burada ilişkiler ve seed, orada veri bütünlüğü kuralları.
+            SchemaConfiguration.Apply(modelBuilder);
+
+            // Dil ve etiket katalogları: ilişkileri ve sabit listeleri.
+            CatalogSeedData.Apply(modelBuilder);
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
@@ -378,6 +390,9 @@ namespace VocabGrid.Data
             // the two seeded above — see CurriculumSeedData for why it lives in
             // its own file.
             CurriculumSeedData.Apply(modelBuilder);
+
+            // 11-20. dersler ve 120 kelimelik B1-B2 bloğu.
+            CurriculumSeedDataB1.Apply(modelBuilder);
 
             modelBuilder.Entity<Quiz>().HasData(
                 new Quiz { QuizID = 1, LessonID = 1, QuestionText = "What does 'Merhaba' mean?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },

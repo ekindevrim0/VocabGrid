@@ -18,7 +18,10 @@ public class CreateFlashcardDto
     [MaxLength(500)]
     public string? ExampleSentence { get; set; }
 
+    [MaxLength(500)]
     public string? ImageUrl { get; set; }
+
+    [MaxLength(500)]
     public string? AudioUrl { get; set; }
 }
 
@@ -35,6 +38,9 @@ public class UpdateFlashcardDto
     [MaxLength(500)]
     public string? ExampleSentence { get; set; }
 
+    [MaxLength(500)]
     public string? ImageUrl { get; set; }
+
+    [MaxLength(500)]
     public string? AudioUrl { get; set; }
 }
