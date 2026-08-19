@@ -234,7 +234,7 @@ public class UserController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var requestedIds = (dto.LearningPurposeIds ?? new List<int>()).Distinct().ToList();
+        var requestedIds = dto.ResolvedIds();
         if (requestedIds.Count > 0)
         {
             var existingPurposes = await _unitOfWork.Repository<LearningPurpose>()
