@@ -20,4 +20,13 @@ public class EmailService : IEmailService
         _logger.LogInformation("Password reset email queued for {Email}.", email);
         return Task.CompletedTask;
     }
+
+    public Task SendEmailVerificationCodeAsync(string email, string code)
+    {
+        // The code is deliberately absent from the log line — logging it would
+        // put a working credential into plain-text log storage, same reasoning
+        // as the reset token above.
+        _logger.LogInformation("Email verification code queued for {Email}.", email);
+        return Task.CompletedTask;
+    }
 }

@@ -41,6 +41,13 @@ public class User
     public string? GoogleId { get; set; }
     public string? AppleId { get; set; }
 
+    /// <summary>
+    /// E-posta adresinin doğrulanıp doğrulanmadığı. Bilinçli olarak giriş için
+    /// zorunlu tutulmaz — aksi halde bu alan eklenmeden önce kayıt olmuş
+    /// kullanıcılar bir anda dışarıda kalırdı. Şimdilik bir durum bilgisidir.
+    /// </summary>
+    public bool IsEmailVerified { get; set; }
+
     public string? RefreshToken { get; set; }
     public DateTime? RefreshTokenExpiryTime { get; set; }
 
@@ -55,5 +62,6 @@ public class User
     public ICollection<UserWordProgress> UserWordProgresses { get; set; } = new List<UserWordProgress>();
     public ICollection<StudyActivity> StudyActivities { get; set; } = new List<StudyActivity>();
     public ICollection<PasswordResetToken> PasswordResetTokens { get; set; } = new List<PasswordResetToken>();
+    public ICollection<EmailVerificationToken> EmailVerificationTokens { get; set; } = new List<EmailVerificationToken>();
     public ICollection<QuizSession> QuizSessions { get; set; } = new List<QuizSession>();
 }

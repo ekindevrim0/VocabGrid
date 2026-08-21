@@ -399,3 +399,8 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Runtime uploads: the folder is tracked (via .gitkeep) so the app can write
+# into it on a fresh clone, but whatever users upload at runtime is not.
+VocabGrid/wwwroot/uploads/*
+!VocabGrid/wwwroot/uploads/.gitkeep

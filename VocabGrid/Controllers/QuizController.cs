@@ -258,6 +258,7 @@ public class QuizController : ControllerBase
             XpEarned = pointsEarned
         };
         await _unitOfWork.Repository<StudyActivity>().AddAsync(activity);
+        await DailySummaryEngine.RecordAsync(_unitOfWork, activity);
 
         StudyEngine.ApplyXp(user, pointsEarned);
         await StudyEngine.UpdateStreakAsync(_unitOfWork, user, submittedAt);

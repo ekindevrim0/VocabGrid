@@ -27,10 +27,27 @@ namespace VocabGrid.Data
         public DbSet<Deck> Decks { get; set; }
         public DbSet<StudyActivity> StudyActivities { get; set; }
         public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
+        public DbSet<EmailVerificationToken> EmailVerificationTokens { get; set; }
+        public DbSet<Language> Languages { get; set; }
+        public DbSet<Tag> Tags { get; set; }
+        public DbSet<VocabularyTag> VocabularyTags { get; set; }
+        public DbSet<DailyStudySummary> DailyStudySummaries { get; set; }
+        public DbSet<DeckTemplate> DeckTemplates { get; set; }
+        public DbSet<DeckTemplateLabel> DeckTemplateLabels { get; set; }
+        public DbSet<DeckTemplateWord> DeckTemplateWords { get; set; }
+        public DbSet<DeckTemplateWordText> DeckTemplateWordTexts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Sütun uzunlukları, arama indeksleri ve CHECK kısıtları — kendi
+            // dosyasında, çünkü burası zaten uzun ve ikisi farklı türde bilgi:
+            // burada ilişkiler ve seed, orada veri bütünlüğü kuralları.
+            SchemaConfiguration.Apply(modelBuilder);
+
+            // Dil ve etiket katalogları: ilişkileri ve sabit listeleri.
+            CatalogSeedData.Apply(modelBuilder);
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
@@ -255,6 +272,23 @@ namespace VocabGrid.Data
                 .HasIndex(t => t.Token)
                 .IsUnique();
 
+            modelBuilder.Entity<EmailVerificationToken>()
+                .HasOne(t => t.User)
+                .WithMany(u => u.EmailVerificationTokens)
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EmailVerificationToken>()
+                .Property(t => t.Code)
+                .HasMaxLength(6);
+
+            // Deliberately NOT unique: a 6-digit code is short enough that two
+            // users can legitimately hold the same one at the same time. Lookups
+            // are always scoped by UserId, so this index only needs to make
+            // "find this user's live codes" fast.
+            modelBuilder.Entity<EmailVerificationToken>()
+                .HasIndex(t => new { t.UserId, t.Code });
+
             // Figma Profile categories (Science dahil) — IconName/ColorHex Flutter mock ile hizalı
             modelBuilder.Entity<Category>().HasData(
                 new Category { Id = 1, Name = "Food", Description = "Food & Dining Vocabulary", IconName = "restaurant", ColorHex = "#F97316" },
@@ -355,6 +389,20 @@ namespace VocabGrid.Data
                     CreatedAt = seedCreatedAt
                 }
             );
+
+            // Lessons 3-10 plus the vocabulary behind every lesson, including
+            // the two seeded above — see CurriculumSeedData for why it lives in
+            // its own file.
+            CurriculumSeedData.Apply(modelBuilder);
+
+            // 11-20. dersler ve 120 kelimelik B1-B2 bloğu.
+            CurriculumSeedDataB1.Apply(modelBuilder);
+
+            // Kategori deste şablonları: kullanıcının kategori seçimine göre
+            // kopyalanan hazır desteler. Müfredattan ayrı durur, çünkü bunlar
+            // bir derse değil bir kategoriye bağlıdır ve paylaşılmak yerine
+            // kullanıcıya kopyalanırlar.
+            DeckTemplateSeedData.Apply(modelBuilder);
 
             modelBuilder.Entity<Quiz>().HasData(
                 new Quiz { QuizID = 1, LessonID = 1, QuestionText = "What does 'Merhaba' mean?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
