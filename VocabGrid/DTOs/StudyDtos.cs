@@ -20,4 +20,12 @@ public sealed class SubmitReviewDto
 
     [Range(0, 3600)]
     public int DurationSeconds { get; init; }
+
+    /// <summary>The learner's self-reported CEFR level (their client-side
+    /// "Difficulty Mode" picker, values A1..C2 — see
+    /// UserSettings.DifficultyMode), used only to nudge a brand-new word's
+    /// initial difficulty estimate; see
+    /// FsrsEngine.ProficiencyDifficultyOffsetFor. Optional and unvalidated
+    /// — an unrecognized or missing value applies no nudge.</summary>
+    public string? DifficultyMode { get; init; }
 }

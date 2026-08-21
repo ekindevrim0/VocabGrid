@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using VocabGrid.DTOs;
 using VocabGrid.Entities;
 using VocabGrid.Interfaces;
+using VocabGrid.Services;
 
 namespace VocabGrid.Controllers;
 
@@ -29,8 +30,19 @@ public class DeckController : ControllerBase
             return Unauthorized();
         }
 
+        var user = await _unitOfWork.Repository<User>().GetByIdAsync(userId.Value);
+        if (user is null)
+        {
+            return Unauthorized();
+        }
+        var currentLanguage = CategoryDeckSynchronizer.ResolveLanguageCode(user.TargetLanguageCode);
+
+        // Scoped to the language the learner is studying right now -- a deck
+        // from a language they've since switched away from isn't deleted
+        // (see CategoryDeckSynchronizer's own retirement rule), it just
+        // doesn't show here until they switch back to it, progress intact.
         var decks = (await _unitOfWork.Repository<Deck>()
-                .FindAsync(deck => deck.UserId == userId.Value))
+                .FindAsync(deck => deck.UserId == userId.Value && deck.LanguageCode == currentLanguage))
             .OrderByDescending(deck => deck.UpdatedAt ?? deck.CreatedAt)
             .ToList();
 
@@ -57,6 +69,7 @@ public class DeckController : ControllerBase
                 Description = deck.Description,
                 CoverImageUrl = deck.CoverImageUrl,
                 StarterKey = deck.StarterKey,
+                LanguageCode = deck.LanguageCode,
                 CreatedAt = deck.CreatedAt,
                 UpdatedAt = deck.UpdatedAt,
                 CardCount = stats.CardCount,
@@ -102,6 +115,7 @@ public class DeckController : ControllerBase
             deck.Description,
             deck.CoverImageUrl,
             deck.StarterKey,
+            deck.LanguageCode,
             deck.CreatedAt,
             deck.UpdatedAt,
             stats.CardCount,
@@ -126,6 +140,12 @@ public class DeckController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
+        var user = await _unitOfWork.Repository<User>().GetByIdAsync(userId.Value);
+        if (user is null)
+        {
+            return Unauthorized();
+        }
+
         var deck = new Deck
         {
             UserId = userId.Value,
@@ -133,6 +153,11 @@ public class DeckController : ControllerBase
             Description = dto.Description?.Trim() ?? string.Empty,
             CoverImageUrl = string.IsNullOrWhiteSpace(dto.CoverImageUrl) ? null : dto.CoverImageUrl.Trim(),
             StarterKey = string.IsNullOrWhiteSpace(dto.StarterKey) ? null : dto.StarterKey.Trim(),
+            // Stamped from whatever the learner is studying right now, not
+            // sent by the client -- every deck belongs to the language it
+            // was made under, so it only shows up while that's still the
+            // active target language.
+            LanguageCode = CategoryDeckSynchronizer.ResolveLanguageCode(user.TargetLanguageCode),
             CreatedAt = DateTime.UtcNow
         };
 
@@ -146,6 +171,7 @@ public class DeckController : ControllerBase
             deck.Description,
             deck.CoverImageUrl,
             deck.StarterKey,
+            deck.LanguageCode,
             deck.CreatedAt,
             deck.UpdatedAt,
             CardCount = 0,
@@ -190,6 +216,7 @@ public class DeckController : ControllerBase
             deck.Description,
             deck.CoverImageUrl,
             deck.StarterKey,
+            deck.LanguageCode,
             deck.CreatedAt,
             deck.UpdatedAt
 });
@@ -232,15 +259,14 @@ public class DeckController : ControllerBase
         var progress = allProgress.Where(p => wordIds.Contains(p.WordID)).ToList();
         var progressByWord = progress.ToDictionary(p => p.WordID);
 
+        // A card with no progress row yet has never been studied -- it isn't
+        // "due for review" (that implies a prior review whose interval
+        // expired), it's simply new. Counting it as due made every untouched
+        // deck report its full card count as due, which looked finished/due
+        // rather than not-yet-started. Only count cards that already have a
+        // review history and have come back around.
         var dueCount = cards.Count(card =>
-        {
-            if (!progressByWord.TryGetValue(card.WordID, out var p))
-            {
-                return true;
-            }
-
-            return p.NextReviewDate is null || p.NextReviewDate <= now;
-        });
+            progressByWord.TryGetValue(card.WordID, out var p) && (p.NextReviewDate is null || p.NextReviewDate <= now));
 
         var masteryPercentage = cards.Count == 0
             ? 0

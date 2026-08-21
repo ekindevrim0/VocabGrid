@@ -149,6 +149,107 @@ public class UserController : ControllerBase
         return Ok(new { Message = "Settings updated successfully.", Settings = MapSettings(settings) });
     }
 
+    [HttpPut("password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+    {
+        var userId = TryGetUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var userRepository = _unitOfWork.Repository<User>();
+        var user = await userRepository.GetByIdAsync(userId.Value);
+        if (user is null)
+        {
+            return Unauthorized();
+        }
+
+        if (!PasswordHasher.VerifyHash(dto.CurrentPassword, user.PasswordHash, user.PasswordSalt))
+        {
+            return BadRequest("Current password is incorrect.");
+        }
+
+        PasswordHasher.CreateHash(dto.NewPassword, out var passwordHash, out var passwordSalt);
+        user.PasswordHash = passwordHash;
+        user.PasswordSalt = passwordSalt;
+        // Changing the password invalidates any other device's session, the
+        // same way a real reset does (AuthController.ResetPassword) --
+        // otherwise a stolen refresh token would survive a password change.
+        user.RefreshToken = null;
+        user.RefreshTokenExpiryTime = null;
+
+        userRepository.Update(user);
+        await _unitOfWork.CompleteAsync();
+
+        return Ok(new { Message = "Password changed successfully." });
+    }
+
+    [HttpDelete]
+    public async Task<IActionResult> DeleteMyAccount()
+    {
+        var userId = TryGetUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var user = await _unitOfWork.Repository<User>().GetByIdAsync(userId.Value);
+        if (user is null)
+        {
+            return Unauthorized();
+        }
+
+        // UserWordProgress, QuizSession, and StudyActivity are configured
+        // NoAction (not Cascade) in AppDbContext -- SQL Server rejects
+        // Users->X and Users->Decks->X both cascading at once for the same
+        // table -- so they need deleting by hand before the User row
+        // itself.
+        var progressRepository = _unitOfWork.Repository<UserWordProgress>();
+        foreach (var progress in await progressRepository.FindAsync(p => p.UserID == user.Id))
+        {
+            progressRepository.Delete(progress);
+        }
+
+        var sessionRepository = _unitOfWork.Repository<QuizSession>();
+        foreach (var session in await sessionRepository.FindAsync(s => s.UserId == user.Id))
+        {
+            sessionRepository.Delete(session);
+        }
+
+        var activityRepository = _unitOfWork.Repository<StudyActivity>();
+        foreach (var activity in await activityRepository.FindAsync(a => a.UserId == user.Id))
+        {
+            activityRepository.Delete(activity);
+        }
+
+        // Vocabulary->Deck is ClientCascade, not a real database cascade --
+        // EF only deletes a deck's cards automatically when it has actually
+        // loaded them into the change tracker as part of *this* operation.
+        // Deleting the User (which does cascade to Decks at the database
+        // level) never loads the Decks' Vocabulary rows, so without this
+        // they'd still reference the about-to-be-deleted Deck and the whole
+        // delete would fail with a FK violation. Deleting them explicitly
+        // here, before the User row, sidesteps that.
+        var deckRepository = _unitOfWork.Repository<Deck>();
+        var deckIds = (await deckRepository.FindAsync(d => d.UserId == user.Id)).Select(d => d.Id).ToHashSet();
+        var vocabularyRepository = _unitOfWork.Repository<Vocabulary>();
+        foreach (var word in await vocabularyRepository.FindAsync(v => v.DeckId != null && deckIds.Contains(v.DeckId.Value)))
+        {
+            vocabularyRepository.Delete(word);
+        }
+
+        _unitOfWork.Repository<User>().Delete(user);
+        await _unitOfWork.CompleteAsync();
+
+        return Ok(new { Message = "Account deleted." });
+    }
+
     [HttpGet("categories")]
     [ProducesResponseType(typeof(IEnumerable<CategoryDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<CategoryDto>>> GetMyCategories()

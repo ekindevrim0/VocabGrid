@@ -5,8 +5,10 @@ namespace VocabGrid.Entities;
 /// <summary>
 /// Bir şablonun tek bir dildeki adı ve açıklaması.
 ///
-/// Hedef dile göre seçilir, öğrenenin kendi diline göre değil: Almanca çalışan
-/// biri "Technik" görür. Deste adını okumak öğrenilen dile ilk küçük temastır.
+/// Öğrenenin kendi (native) diline göre seçilir, hedef dile göre değil:
+/// Almanca çalışan bir İngiliz "Technology" görür, "Technik" değil -- deste
+/// listesi bir gezinme yüzeyi, öğrenenin akıcı okuyabilmesi gerekiyor.
+/// Öğrenilen dille asıl temas kartların kendisinde (Term/Translation).
 /// Karşılığı olmayan dil için çağıran taraf İngilizceye düşer, böylece dil
 /// listesine yeni bir dil eklemek adsız deste üretemez.
 /// </summary>

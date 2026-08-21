@@ -74,7 +74,7 @@ public class AuthController : ControllerBase
             return BadRequest("User with this email already exists.");
         }
 
-        CreatePasswordHash(request.Password, out byte[] passwordHash, out byte[] passwordSalt);
+        PasswordHasher.CreateHash(request.Password, out byte[] passwordHash, out byte[] passwordSalt);
 
         var user = new User
         {
@@ -114,7 +114,7 @@ public class AuthController : ControllerBase
         var users = await userRepository.FindAsync(u => u.Email.ToLower() == request.Email.Trim().ToLowerInvariant());
         var user = users.FirstOrDefault();
 
-        if (user == null || !VerifyPasswordHash(request.Password, user.PasswordHash, user.PasswordSalt))
+        if (user == null || !PasswordHasher.VerifyHash(request.Password, user.PasswordHash, user.PasswordSalt))
         {
             return Unauthorized("Invalid credentials.");
         }
@@ -328,7 +328,7 @@ public class AuthController : ControllerBase
             return BadRequest("Invalid, expired, or already used password reset token.");
         }
 
-        CreatePasswordHash(request.NewPassword, out byte[] passwordHash, out byte[] passwordSalt);
+        PasswordHasher.CreateHash(request.NewPassword, out byte[] passwordHash, out byte[] passwordSalt);
         user.PasswordHash = passwordHash;
         user.PasswordSalt = passwordSalt;
         user.RefreshToken = null;
@@ -653,24 +653,5 @@ public class AuthController : ControllerBase
         var token = tokenHandler.CreateToken(tokenDescriptor);
 
         return tokenHandler.WriteToken(token);
-    }
-
-    private static void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
-    {
-        using var hmac = new HMACSHA512();
-        passwordSalt = hmac.Key;
-        passwordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
-    }
-
-    private static bool VerifyPasswordHash(string password, byte[] passwordHash, byte[] passwordSalt)
-    {
-        if (passwordHash.Length == 0 || passwordSalt.Length == 0)
-        {
-            return false;
-        }
-
-        using var hmac = new HMACSHA512(passwordSalt);
-        var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
-        return computedHash.SequenceEqual(passwordHash);
     }
 }

@@ -68,3 +68,13 @@ public class UserSettingsDto
     public string TextSize { get; set; } = "Medium";
     public string DifficultyMode { get; set; } = "Adaptive";
 }
+
+public class ChangePasswordDto
+{
+    [Required]
+    public string CurrentPassword { get; set; } = string.Empty;
+
+    [Required]
+    [MinLength(8)]
+    public string NewPassword { get; set; } = string.Empty;
+}

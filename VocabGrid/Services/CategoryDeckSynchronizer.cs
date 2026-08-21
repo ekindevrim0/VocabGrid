@@ -99,8 +99,8 @@ internal static class CategoryDeckSynchronizer
             return SyncReport.Empty;
         }
 
-        var targetCode = Normalize(user.TargetLanguageCode);
-        var nativeCode = Normalize(user.NativeLanguageCode);
+        var targetCode = ResolveLanguageCode(user.TargetLanguageCode);
+        var nativeCode = ResolveLanguageCode(user.NativeLanguageCode);
 
         // Aynı dili öğrenmek diye bir şey yok: her kart terim ve çevirisiyle
         // aynı olurdu, aşağıdaki filtre hepsini eleyip boş deste bırakırdı.
@@ -407,7 +407,11 @@ internal static class CategoryDeckSynchronizer
                 DeckId = deck.Id,
                 Term = term,
                 Translation = translation,
-                ExampleSentence = string.Empty,
+                // In the target language, using the term itself -- this is
+                // where real target-language contact happens (the deck's
+                // own title/description are native-language navigation,
+                // see LabelFor above).
+                ExampleSentence = ExampleSentenceTemplates.For(template.Slug, targetCode, term) ?? string.Empty,
                 CreatedAt = now,
             });
             added++;
@@ -489,7 +493,12 @@ internal static class CategoryDeckSynchronizer
         string nativeCode,
         int levelCeiling)
     {
-        var label = LabelFor(template, targetCode);
+        // Native language, not target: the deck list is navigation, and a
+        // learner needs to read it fluently to find anything in it. The
+        // cards themselves -- term in targetCode, translation in
+        // nativeCode, below -- are where the actual target-language contact
+        // happens; the label was never that.
+        var label = LabelFor(template, nativeCode);
         var now = DateTime.UtcNow;
 
         var cards = new List<Vocabulary>();
@@ -514,7 +523,7 @@ internal static class CategoryDeckSynchronizer
             {
                 Term = term,
                 Translation = translation,
-                ExampleSentence = string.Empty,
+                ExampleSentence = ExampleSentenceTemplates.For(template.Slug, targetCode, term) ?? string.Empty,
                 CreatedAt = now,
             });
         }
@@ -539,6 +548,7 @@ internal static class CategoryDeckSynchronizer
             Title = label.Title,
             Description = label.Description,
             StarterKey = starterKey,
+            LanguageCode = targetCode,
             CreatedAt = now,
             Flashcards = cards,
         };
@@ -548,8 +558,10 @@ internal static class CategoryDeckSynchronizer
     }
 
     /// <summary>
-    /// Hedef dildeki etiket; yoksa İngilizce. Dil listesine yeni bir dil
-    /// eklemek, o dilin metni yazılana kadar adsız deste üretmesin diye.
+    /// Bir şablonun [languageCode]'daki adı/açıklaması; o dilde metin yoksa
+    /// İngilizceye düşer, böylece dil listesine yeni bir dil eklemek, metni
+    /// yazılana kadar adsız deste üretmez. Öğrenenin *ana* diliyle çağrılır
+    /// (bkz. <see cref="BuildDeckAsync"/>), hedef diliyle değil.
     /// </summary>
     private static DeckTemplateLabel LabelFor(DeckTemplate template, string languageCode) =>
         template.Labels.FirstOrDefault(l => string.Equals(l.LanguageCode, languageCode, StringComparison.OrdinalIgnoreCase))
@@ -580,4 +592,26 @@ internal static class CategoryDeckSynchronizer
     }
 
     private static string Normalize(string? code) => (code ?? string.Empty).Trim().ToLowerInvariant();
+
+    /// <summary>
+    /// A learner's stored language code to the ISO code the catalog's word
+    /// texts are keyed by.
+    ///
+    /// The Flutter client's own language picker (<c>MockData.languages</c>)
+    /// sends flag/country-style codes ("GB" for English, "JP" for Japanese,
+    /// "KR" for Korean, "CN" for Chinese) rather than ISO 639-1, and those
+    /// four are exactly the ones that don't happen to already coincide with
+    /// their ISO equivalent ("DE"/"FR"/"ES"/"IT"/"PT"/"TR" all lowercase to
+    /// their own ISO code, so this went unnoticed for those). Left as a bare
+    /// lowercase, "gb"/"jp"/"kr"/"cn" match nothing in
+    /// <see cref="DeckTemplateWordText.LanguageCode"/>, so every word in
+    /// <see cref="BuildDeckAsync"/>'s loop fails its
+    /// <c>term is null || translation is null</c> check and the deck comes
+    /// out with zero cards -- silently skipped rather than created. This
+    /// reuses <see cref="IsoForFlag"/>, the same table already relied on to
+    /// recognize a legacy client-created deck's language in
+    /// <see cref="AbsorbClientDecksAsync"/>, so there's one mapping instead
+    /// of two that could drift apart.
+    /// </summary>
+    internal static string ResolveLanguageCode(string? code) => IsoForFlag(code ?? string.Empty) ?? Normalize(code);
 }

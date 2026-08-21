@@ -161,7 +161,32 @@ public class ProgressController : ControllerBase
         // Deste-siz bir kart yalnızca paylaşılan müfredata aitse
         // çalışılabilir; sahipsiz deste-siz kayıtlar tekrar kuyruğuna
         // girmez. Bu kural aşağıdaki LessonVocabularies alt sorgusunda.
-        var includeCurriculum = deckId is null;
+        //
+        // Müfredat (Lessons/LessonVocabularies) hiçbir dil alanı taşımıyor --
+        // sabit kodlanmış, tek bir çift için yazılmış (İngilizce konuşan,
+        // Türkçe öğrenen). Sadece deckId boş diye herkese eklemek, mesela
+        // Almanca çalışan bir öğrenenin tekrar kuyruğuna rastgele Türkçe
+        // kelimeler karıştırması demekti -- kendi kurduğu hiçbir desteyle
+        // ilgisi olmayan kelimeler. Yalnızca gerçekten o çift için geçerli.
+        //
+        // Aynı sebeple, deckId verilmediğinde ("tüm desteler") havuz da
+        // öğrenenin şu anki hedef diliyle sınırlı -- yoksa bir dilden
+        // diğerine geçen ama eski destelerinde ilerlemesi duran bir öğrenen,
+        // karma tekrar kuyruğunda hâlâ eski dilin kartlarını görürdü.
+        User? user = null;
+        string? currentLanguage = null;
+        var includeCurriculum = false;
+        if (deckId is null)
+        {
+            user = await _unitOfWork.Repository<User>().GetByIdAsync(userId.Value);
+            if (user is null)
+            {
+                return Unauthorized();
+            }
+            currentLanguage = CategoryDeckSynchronizer.ResolveLanguageCode(user.TargetLanguageCode);
+            includeCurriculum = CategoryDeckSynchronizer.ResolveLanguageCode(user.NativeLanguageCode) == "en"
+                && currentLanguage == "tr";
+        }
         var now = DateTime.UtcNow;
 
         var lessonLinks = _unitOfWork.Repository<LessonVocabulary>().Query();
@@ -171,7 +196,7 @@ public class ProgressController : ControllerBase
         var pool = _unitOfWork.Repository<Vocabulary>().Query()
             .Where(word => deckId != null
                 ? word.DeckId == deckId
-                : (word.DeckId != null && word.Deck!.UserId == userId.Value)
+                : (word.DeckId != null && word.Deck!.UserId == userId.Value && word.Deck!.LanguageCode == currentLanguage)
                   || (includeCurriculum && word.DeckId == null
                       && lessonLinks.Any(link => link.WordID == word.WordID)));
 
@@ -259,20 +284,29 @@ public class ProgressController : ControllerBase
         }
 
         var userWordProgress = progress!;
+        // Must be read before LastReviewedAt is overwritten below -- FsrsEngine
+        // needs the *previous* review's timestamp to know how many days have
+        // elapsed since then, not this one.
+        var previousReviewedAt = isNewProgress ? (DateTime?)null : userWordProgress.LastReviewedAt;
 
-        var schedule = StudyEngine.CalculateReviewSchedule(
-            userWordProgress.IntervalDays,
-            userWordProgress.EaseFactor,
+        var schedule = FsrsEngine.ReviewCard(
+            userWordProgress.Stability,
+            userWordProgress.Difficulty,
+            previousReviewedAt,
             dto.Rating,
-            reviewedAt);
+            reviewedAt,
+            cefrLevel: dto.DifficultyMode);
 
-        userWordProgress.IntervalDays = schedule.IntervalDays;
-        userWordProgress.EaseFactor = schedule.EaseFactor;
+        userWordProgress.Stability = schedule.Stability;
+        userWordProgress.Difficulty = schedule.Difficulty;
+        // Refreshed for continuity/debugging only -- nothing computes from
+        // these anymore, see the doc comment on UserWordProgress.
+        userWordProgress.IntervalDays = Math.Max(1, (int)Math.Round((schedule.NextReviewDate - reviewedAt).TotalDays));
         userWordProgress.NextReviewDate = schedule.NextReviewDate;
         userWordProgress.LastReviewedAt = reviewedAt;
         userWordProgress.LastRating = dto.Rating;
         userWordProgress.ReviewCount++;
-        userWordProgress.MasteryLevel = Math.Clamp(userWordProgress.MasteryLevel + schedule.MasteryDelta, 0, 5);
+        userWordProgress.MasteryLevel = schedule.MasteryLevel;
         if (isNewProgress)
         {
             await progressRepository.AddAsync(userWordProgress);

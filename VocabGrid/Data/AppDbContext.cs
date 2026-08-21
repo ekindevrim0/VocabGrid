@@ -36,6 +36,7 @@ namespace VocabGrid.Data
         public DbSet<DeckTemplateLabel> DeckTemplateLabels { get; set; }
         public DbSet<DeckTemplateWord> DeckTemplateWords { get; set; }
         public DbSet<DeckTemplateWordText> DeckTemplateWordTexts { get; set; }
+        public DbSet<SupportTicket> SupportTickets { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -288,6 +289,13 @@ namespace VocabGrid.Data
             // "find this user's live codes" fast.
             modelBuilder.Entity<EmailVerificationToken>()
                 .HasIndex(t => new { t.UserId, t.Code });
+
+            modelBuilder.Entity<SupportTicket>()
+                .HasOne(t => t.User)
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
 
             // Figma Profile categories (Science dahil) — IconName/ColorHex Flutter mock ile hizalı
             modelBuilder.Entity<Category>().HasData(
