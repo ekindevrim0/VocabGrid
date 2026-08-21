@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using VocabGrid.DTOs;
 using VocabGrid.Entities;
 using VocabGrid.Interfaces;
+using VocabGrid.Services;
 
 namespace VocabGrid.Controllers;
 
@@ -65,6 +66,8 @@ public class UserController : ControllerBase
             return NotFound("User not found.");
         }
 
+        var previousTargetCode = user.TargetLanguageCode;
+
         user.FirstName = dto.FirstName.Trim();
         user.LastName = dto.LastName.Trim();
         user.AvatarUrl = string.IsNullOrWhiteSpace(dto.AvatarUrl) ? user.AvatarUrl : dto.AvatarUrl.Trim();
@@ -83,6 +86,15 @@ public class UserController : ControllerBase
 
         userRepository.Update(user);
         await _unitOfWork.CompleteAsync();
+
+        // Hedef dil değiştiyse kategori desteleri de o dile geçmeli: eskiler
+        // artık istenmeyen anahtarı taşır ve dokunulmamışlarsa yerlerini yeni
+        // dildeki karşılıklarına bırakır. Dil aynı kaldıysa hiç uğraşmıyoruz —
+        // senkronizasyon her çağrıda tüm şablonları okur.
+        if (!string.Equals(previousTargetCode, user.TargetLanguageCode, StringComparison.OrdinalIgnoreCase))
+        {
+            await CategoryDeckSynchronizer.SyncAsync(_unitOfWork, userId.Value);
+        }
 
         return Ok(new { Message = "Profile updated successfully.", Profile = MapProfile(user) });
     }
@@ -112,6 +124,8 @@ public class UserController : ControllerBase
         var settingsRepository = _unitOfWork.Repository<UserSettings>();
         var settings = await GetOrCreateSettingsAsync(userId.Value);
 
+        var previousDifficulty = settings.DifficultyMode;
+
         settings.DarkMode = dto.DarkMode;
         settings.DailyReminders = dto.DailyReminders;
         settings.SoundEffects = dto.SoundEffects;
@@ -123,6 +137,14 @@ public class UserController : ControllerBase
 
         settingsRepository.Update(settings);
         await _unitOfWork.CompleteAsync();
+
+        // Zorluk seviyesi kelime seçimini belirliyor: seviye yükseldiyse
+        // kategori destelerine artık kapsama giren kartlar eklenir. Seviye
+        // düştüğünde hiçbir şey silinmez — o kartlarda ilerleme olabilir.
+        if (!string.Equals(previousDifficulty, settings.DifficultyMode, StringComparison.OrdinalIgnoreCase))
+        {
+            await CategoryDeckSynchronizer.SyncAsync(_unitOfWork, userId.Value);
+        }
 
         return Ok(new { Message = "Settings updated successfully.", Settings = MapSettings(settings) });
     }
@@ -193,6 +215,13 @@ public class UserController : ControllerBase
         }
 
         await _unitOfWork.CompleteAsync();
+
+        // Seçim kaydedildikten sonra kitaplığı ona göre kur: yeni kategorinin
+        // destesi eklenir, çıkarılan kategorinin destesi dokunulmamışsa
+        // kaldırılır. Kullanıcı bu ekranı kapattığında kitaplığın hazır olması
+        // gerekiyor, bu yüzden arka plana atılmıyor.
+        await CategoryDeckSynchronizer.SyncAsync(_unitOfWork, userId.Value);
+
         return await GetMyCategories();
     }
 
@@ -296,7 +325,8 @@ public class UserController : ControllerBase
         LongestStreak = user.LongestStreak,
         Level = user.Level,
         TotalXp = user.TotalXp,
-        IsPremium = user.IsPremium
+        IsPremium = user.IsPremium,
+        IsEmailVerified = user.IsEmailVerified
     };
 
     private static CategoryDto MapCategoryDto(Category category) => new()

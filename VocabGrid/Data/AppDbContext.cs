@@ -32,6 +32,10 @@ namespace VocabGrid.Data
         public DbSet<Tag> Tags { get; set; }
         public DbSet<VocabularyTag> VocabularyTags { get; set; }
         public DbSet<DailyStudySummary> DailyStudySummaries { get; set; }
+        public DbSet<DeckTemplate> DeckTemplates { get; set; }
+        public DbSet<DeckTemplateLabel> DeckTemplateLabels { get; set; }
+        public DbSet<DeckTemplateWord> DeckTemplateWords { get; set; }
+        public DbSet<DeckTemplateWordText> DeckTemplateWordTexts { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -393,6 +397,12 @@ namespace VocabGrid.Data
 
             // 11-20. dersler ve 120 kelimelik B1-B2 bloğu.
             CurriculumSeedDataB1.Apply(modelBuilder);
+
+            // Kategori deste şablonları: kullanıcının kategori seçimine göre
+            // kopyalanan hazır desteler. Müfredattan ayrı durur, çünkü bunlar
+            // bir derse değil bir kategoriye bağlıdır ve paylaşılmak yerine
+            // kullanıcıya kopyalanırlar.
+            DeckTemplateSeedData.Apply(modelBuilder);
 
             modelBuilder.Entity<Quiz>().HasData(
                 new Quiz { QuizID = 1, LessonID = 1, QuestionText = "What does 'Merhaba' mean?", QuestionType = "MultipleChoice", Points = 1, TimeLimitSeconds = 20 },
