@@ -84,7 +84,21 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection(SmtpSettings.SectionName));
+
+// Pick the transport from configuration rather than the environment: a
+// developer with no SMTP credentials still gets a working API (codes land in
+// the database and, in Development, in the send-verification-code response),
+// while anyone who fills in Smtp:* starts sending real mail immediately.
+var smtpSettings = builder.Configuration.GetSection(SmtpSettings.SectionName).Get<SmtpSettings>() ?? new SmtpSettings();
+if (smtpSettings.IsConfigured)
+{
+    builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+}
+else
+{
+    builder.Services.AddScoped<IEmailService, EmailService>();
+}
 
 // UseExceptionHandler, govdesiz bir 500 yerine ProblemDetails uretsin diye.
 builder.Services.AddProblemDetails();
@@ -145,6 +159,51 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// Says out loud whether mail actually leaves the machine — without this, a
+// misconfigured Smtp section looks identical to a working one until someone
+// notices no email ever arrived.
+app.Logger.LogInformation(
+    smtpSettings.IsConfigured
+        ? "Email transport: SMTP via {Host}:{Port} as {User}."
+        : "Email transport: logging stub — no Smtp:Host/User/Password configured, so no mail will be sent.",
+    smtpSettings.Host,
+    smtpSettings.Port,
+    smtpSettings.User);
+
+// Creates the database on first run and applies anything added since, so a
+// fresh clone needs nothing but `dotnet run` — no EF CLI tool, no separate
+// command. Development only: in production a schema change should be a
+// deliberate, reviewed step, and two instances starting at once would race
+// each other trying to apply it.
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    try
+    {
+        var pending = db.Database.GetPendingMigrations().ToList();
+        if (pending.Count > 0)
+        {
+            app.Logger.LogInformation(
+                "Applying {Count} pending migration(s) to {Database}.",
+                pending.Count,
+                db.Database.GetDbConnection().Database);
+            db.Database.Migrate();
+        }
+
+        app.Logger.LogInformation("Database ready: {Database}.", db.Database.GetDbConnection().Database);
+    }
+    catch (Exception ex)
+    {
+        // Rethrown on purpose: a half-prepared database would fail later in a
+        // far more confusing way than at startup.
+        app.Logger.LogError(
+            ex,
+            "Could not prepare the database. Check that SQL Server is running and that ConnectionStrings:DefaultConnection points at it.");
+        throw;
+    }
+}
 
 if (app.Environment.IsDevelopment())
 {

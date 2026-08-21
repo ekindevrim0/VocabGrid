@@ -25,6 +25,15 @@ public class AuthController : ControllerBase
     private static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
     private static readonly TimeSpan PasswordResetLifetime = TimeSpan.FromHours(1);
 
+    /// <summary>
+    /// Deliberately much shorter than <see cref="PasswordResetLifetime"/>: a
+    /// 6-digit code is far weaker than a 64-byte token, so it must not stay
+    /// guessable for an hour.
+    /// </summary>
+    private static readonly TimeSpan EmailVerificationLifetime = TimeSpan.FromMinutes(15);
+
+    private const int MaxVerificationAttempts = 5;
+
     private static readonly ConfigurationManager<OpenIdConnectConfiguration> AppleConfigurationManager =
         new(
             AppleOpenIdConfigurationUrl,
@@ -81,6 +90,13 @@ public class AuthController : ControllerBase
         await userRepository.AddAsync(user);
         await IssueRefreshTokenAsync(user);
         await _unitOfWork.CompleteAsync();
+
+        // The client moves straight to its "Verify Your Email" step after this
+        // response, so a code has to be waiting by the time it gets there.
+        // CompleteAsync above has to run first — the token needs user.Id.
+        var verificationCode = await IssueEmailVerificationCodeAsync(user);
+        await _unitOfWork.CompleteAsync();
+        await _emailService.SendEmailVerificationCodeAsync(user.Email, verificationCode);
 
         return Ok(BuildAuthResponse("Registration successful.", user));
     }
@@ -180,6 +196,109 @@ public class AuthController : ControllerBase
         }
 
         return Ok(new { Message = clientMessage });
+    }
+
+    [HttpPost("send-verification-code")]
+    public async Task<IActionResult> SendEmailVerificationCode([FromBody] SendEmailVerificationDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var user = (await _unitOfWork.Repository<User>()
+            .FindAsync(u => u.Email.ToLower() == normalizedEmail)).FirstOrDefault();
+
+        // Same anti-enumeration stance as forgot-password: the reply must not
+        // reveal whether the address is registered, or whether it is already
+        // verified.
+        const string clientMessage = "If an account exists, a verification code has been sent.";
+
+        if (user is null || user.IsEmailVerified)
+        {
+            return Ok(new { Message = clientMessage });
+        }
+
+        var code = await IssueEmailVerificationCodeAsync(user);
+        await _unitOfWork.CompleteAsync();
+        await _emailService.SendEmailVerificationCodeAsync(user.Email, code);
+
+        if (_environment.IsDevelopment())
+        {
+            // Swagger/local testing only — never expose codes outside Development.
+            return Ok(new { Message = clientMessage, DevVerificationCode = code });
+        }
+
+        return Ok(new { Message = clientMessage });
+    }
+
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        // One message for "no such user", "no live code" and "wrong code" alike,
+        // so the endpoint can't be used to probe which addresses exist.
+        const string failureMessage = "Invalid or expired verification code.";
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var userRepository = _unitOfWork.Repository<User>();
+        var user = (await userRepository.FindAsync(u => u.Email.ToLower() == normalizedEmail)).FirstOrDefault();
+
+        if (user is null)
+        {
+            return BadRequest(failureMessage);
+        }
+
+        if (user.IsEmailVerified)
+        {
+            // Idempotent: re-verifying is a no-op success, not an error, so a
+            // retried request can't strand the client.
+            return Ok(new { Message = "Email is already verified.", user.Email, user.IsEmailVerified });
+        }
+
+        var tokenRepository = _unitOfWork.Repository<EmailVerificationToken>();
+        var tokenEntity = (await tokenRepository.FindAsync(t =>
+            t.UserId == user.Id &&
+            !t.IsUsed &&
+            t.ExpiresAt > DateTime.UtcNow)).FirstOrDefault();
+
+        if (tokenEntity is null)
+        {
+            return BadRequest(failureMessage);
+        }
+
+        if (tokenEntity.AttemptCount >= MaxVerificationAttempts)
+        {
+            // Burn the code rather than just rejecting this attempt: otherwise
+            // the budget would reset the moment the caller guessed correctly.
+            tokenEntity.IsUsed = true;
+            tokenRepository.Update(tokenEntity);
+            await _unitOfWork.CompleteAsync();
+            return BadRequest("Too many attempts. Request a new verification code.");
+        }
+
+        var expected = Encoding.UTF8.GetBytes(tokenEntity.Code);
+        var supplied = Encoding.UTF8.GetBytes(request.Code.Trim());
+        if (!CryptographicOperations.FixedTimeEquals(expected, supplied))
+        {
+            tokenEntity.AttemptCount++;
+            tokenRepository.Update(tokenEntity);
+            await _unitOfWork.CompleteAsync();
+            return BadRequest(failureMessage);
+        }
+
+        tokenEntity.IsUsed = true;
+        user.IsEmailVerified = true;
+        tokenRepository.Update(tokenEntity);
+        userRepository.Update(user);
+        await _unitOfWork.CompleteAsync();
+
+        return Ok(new { Message = "Email verified successfully.", user.Email, user.IsEmailVerified });
     }
 
     [HttpPost("reset-password")]
@@ -405,6 +524,37 @@ public class AuthController : ControllerBase
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Retires any code the user still has outstanding and issues a fresh one.
+    /// The caller is responsible for the surrounding <c>CompleteAsync</c> —
+    /// register needs the user persisted first, so saving is left to it.
+    /// </summary>
+    private async Task<string> IssueEmailVerificationCodeAsync(User user)
+    {
+        var repository = _unitOfWork.Repository<EmailVerificationToken>();
+
+        // Only one code may be live at a time. Without this, every "resend"
+        // would leave the previously mailed codes valid too, multiplying the
+        // number of values an attacker can guess against.
+        var outstanding = await repository.FindAsync(t => t.UserId == user.Id && !t.IsUsed);
+        foreach (var token in outstanding)
+        {
+            token.IsUsed = true;
+            repository.Update(token);
+        }
+
+        var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+        await repository.AddAsync(new EmailVerificationToken
+        {
+            UserId = user.Id,
+            Code = code,
+            ExpiresAt = DateTime.UtcNow.Add(EmailVerificationLifetime),
+            IsUsed = false
+        });
+
+        return code;
+    }
+
     private object BuildAuthResponse(
         string message,
         User user,
@@ -412,10 +562,10 @@ public class AuthController : ControllerBase
         bool includeAppleId = false)
     {
         object userPayload = includeGoogleId
-            ? new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.GoogleId }
+            ? new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.IsEmailVerified, user.GoogleId }
             : includeAppleId
-                ? new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.AppleId }
-                : new { user.Id, user.FirstName, user.LastName, user.Username, user.Email };
+                ? new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.IsEmailVerified, user.AppleId }
+                : new { user.Id, user.FirstName, user.LastName, user.Username, user.Email, user.IsEmailVerified };
 
         return new
         {
